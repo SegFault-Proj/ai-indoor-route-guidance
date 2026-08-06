@@ -634,6 +634,30 @@ Content-Type: application/json
 `overlap_ratio`는 1번 경로와 겹치는 비율, `detour_ratio`는 1번 경로 대비 비용 비율,
 `quality_score`는 중복이 적고 과도하게 돌아가지 않는 후보일수록 높게 계산한 점수입니다.
 
+다중 목적지 경로 계산:
+
+```http
+POST http://127.0.0.1:8000/route-multi-stop
+Content-Type: application/json
+```
+
+```json
+{
+  "map_id": "default",
+  "start_id": "GATE_W1",
+  "destination_ids": ["CATERING", "PHOTO_ZONE", "BOOTH_10"],
+  "order_algorithm": "optimal",
+  "algorithm": "astar",
+  "use_congestion": true
+}
+```
+
+`order_algorithm`의 기본값은 `optimal`입니다. 최대 8개 목적지에 대해 pairwise 경로
+비용을 계산한 뒤 DP 방식으로 전체 방문 순서를 최적화합니다. 기존처럼 가까운 목적지를
+순서대로 고르는 방식이 필요하면 `nearest`를 보낼 수 있습니다. 응답에는 실제 방문 순서
+(`ordered_destination_ids`), 계산한 pairwise 경로 수(`pairwise_route_count`), 각 구간의
+개별 경로(`legs`)가 포함됩니다.
+
 현재 위치 기반 재경로 계산:
 
 ```http

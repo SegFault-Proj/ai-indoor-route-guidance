@@ -59,6 +59,7 @@ DEFAULT_MAP_ID = "default"
 COORDINATE_NODE_LOCK_PX = 32
 RoutePreference = Literal["shortest", "less_crowded", "accessible", "fewest_turns"]
 SearchAlgorithm = Literal["astar", "dijkstra"]
+MultiStopOrderAlgorithm = Literal["optimal", "nearest"]
 TEMPORARY_BLOCKED_EDGES: dict[str, dict[str, str | None]] = {}
 
 
@@ -146,6 +147,7 @@ class RouteMultiStopRequest(BaseModel):
     log_route_intent: bool = True
     preference: RoutePreference = "shortest"
     algorithm: SearchAlgorithm = "astar"
+    order_algorithm: MultiStopOrderAlgorithm = "optimal"
     blocked_edge_ids: list[str] = Field(default_factory=list)
 
 
@@ -475,6 +477,8 @@ class MultiStopLeg(BaseModel):
 class RouteMultiStopResponse(BaseModel):
     map_id: str
     start_id: str
+    order_algorithm: MultiStopOrderAlgorithm
+    pairwise_route_count: int
     ordered_destination_ids: list[str]
     total_distance: float
     weighted_cost: float
@@ -3062,9 +3066,172 @@ def route_recommendation(request: RouteAlternativesRequest):
     )
 
 
+def multi_stop_pairwise_routes(
+    venue_map: dict[str, Any],
+    start_id: str,
+    destination_ids: list[str],
+    multipliers: dict[str, float],
+    blocked_edge_ids: set[str],
+    turn_penalty: float,
+    algorithm: SearchAlgorithm,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    node_ids = [start_id, *destination_ids]
+    pairwise_routes: dict[tuple[str, str], dict[str, Any]] = {}
+    for from_id in node_ids:
+        for to_id in destination_ids:
+            if from_id == to_id:
+                continue
+            route_result = calculate_shortest_route(
+                venue_map["nodes"],
+                venue_map["edges"],
+                multipliers,
+                from_id,
+                to_id,
+                blocked_edge_ids=blocked_edge_ids,
+                turn_penalty=turn_penalty,
+                algorithm=algorithm,
+            )
+            if route_result is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail={
+                        "message": "Route not found for one of the requested stops.",
+                        "start_id": from_id,
+                        "destination_id": to_id,
+                        "map_id": venue_map["id"],
+                    },
+                )
+            pairwise_routes[(from_id, to_id)] = route_result
+    return pairwise_routes
+
+
+def nearest_multi_stop_order(
+    start_id: str,
+    destination_ids: list[str],
+    pairwise_routes: dict[tuple[str, str], dict[str, Any]],
+) -> list[str]:
+    ordered_destination_ids: list[str] = []
+    remaining_destination_ids = list(destination_ids)
+    current_id = start_id
+    while remaining_destination_ids:
+        next_destination_id = min(
+            remaining_destination_ids,
+            key=lambda destination_id: pairwise_routes[
+                (current_id, destination_id)
+            ]["weighted_cost"],
+        )
+        ordered_destination_ids.append(next_destination_id)
+        remaining_destination_ids.remove(next_destination_id)
+        current_id = next_destination_id
+    return ordered_destination_ids
+
+
+def optimal_multi_stop_order(
+    start_id: str,
+    destination_ids: list[str],
+    pairwise_routes: dict[tuple[str, str], dict[str, Any]],
+) -> list[str]:
+    destination_count = len(destination_ids)
+    full_mask = (1 << destination_count) - 1
+    costs: dict[tuple[int, int], float] = {}
+    previous: dict[tuple[int, int], int | None] = {}
+
+    for index, destination_id in enumerate(destination_ids):
+        mask = 1 << index
+        costs[(mask, index)] = float(
+            pairwise_routes[(start_id, destination_id)]["weighted_cost"]
+        )
+        previous[(mask, index)] = None
+
+    for mask in range(1, full_mask + 1):
+        for last_index, last_destination_id in enumerate(destination_ids):
+            state = (mask, last_index)
+            if state not in costs:
+                continue
+            for next_index, next_destination_id in enumerate(destination_ids):
+                next_bit = 1 << next_index
+                if mask & next_bit:
+                    continue
+                next_mask = mask | next_bit
+                next_cost = costs[state] + float(
+                    pairwise_routes[(last_destination_id, next_destination_id)][
+                        "weighted_cost"
+                    ]
+                )
+                next_state = (next_mask, next_index)
+                if next_cost < costs.get(next_state, float("inf")):
+                    costs[next_state] = next_cost
+                    previous[next_state] = last_index
+
+    best_state = min(
+        ((full_mask, index) for index in range(destination_count)),
+        key=lambda state: costs.get(state, float("inf")),
+    )
+    if best_state not in costs:
+        raise HTTPException(
+            status_code=404,
+            detail="No valid multi-stop order found.",
+        )
+
+    ordered_reversed: list[str] = []
+    mask, current_index = best_state
+    while current_index is not None:
+        ordered_reversed.append(destination_ids[current_index])
+        prev_index = previous[(mask, current_index)]
+        mask &= ~(1 << current_index)
+        current_index = prev_index
+
+    return list(reversed(ordered_reversed))
+
+
+def multi_stop_order(
+    request: RouteMultiStopRequest,
+    venue_map: dict[str, Any],
+    multipliers: dict[str, float],
+    blocked_edge_ids: set[str],
+) -> tuple[list[str], int]:
+    turn_penalty = preference_turn_penalty(request.preference)
+    pairwise_routes = multi_stop_pairwise_routes(
+        venue_map,
+        request.start_id,
+        request.destination_ids,
+        multipliers,
+        blocked_edge_ids,
+        turn_penalty,
+        request.algorithm,
+    )
+    if request.order_algorithm == "nearest":
+        return (
+            nearest_multi_stop_order(
+                request.start_id,
+                request.destination_ids,
+                pairwise_routes,
+            ),
+            len(pairwise_routes),
+        )
+    return (
+        optimal_multi_stop_order(
+            request.start_id,
+            request.destination_ids,
+            pairwise_routes,
+        ),
+        len(pairwise_routes),
+    )
+
+
 @app.post("/route-multi-stop", response_model=RouteMultiStopResponse)
 def route_multi_stop(request: RouteMultiStopRequest):
     venue_map = load_map(request.map_id)
+    if request.start_id in request.destination_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="destination_ids must not include start_id.",
+        )
+    if len(set(request.destination_ids)) != len(request.destination_ids):
+        raise HTTPException(
+            status_code=400,
+            detail="destination_ids must not contain duplicates.",
+        )
     validate_route_node_ids(
         venue_map,
         [request.start_id, *request.destination_ids],
@@ -3081,38 +3248,12 @@ def route_multi_stop(request: RouteMultiStopRequest):
         applied_predictions,
         request.preference,
     )
-
-    ordered_destination_ids: list[str] = []
-    remaining_destination_ids = list(request.destination_ids)
-    current_id = request.start_id
-    while remaining_destination_ids:
-        candidates = []
-        for destination_id in remaining_destination_ids:
-            route_result = calculate_shortest_route(
-                venue_map["nodes"],
-                venue_map["edges"],
-                multipliers,
-                current_id,
-                destination_id,
-                blocked_edge_ids=blocked_edge_ids,
-                turn_penalty=preference_turn_penalty(request.preference),
-                algorithm=request.algorithm,
-            )
-            if route_result is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail={
-                        "message": "Route not found for one of the requested stops.",
-                        "start_id": current_id,
-                        "destination_id": destination_id,
-                        "map_id": request.map_id,
-                    },
-                )
-            candidates.append((route_result["weighted_cost"], destination_id))
-        _cost, next_destination_id = min(candidates, key=lambda item: item[0])
-        ordered_destination_ids.append(next_destination_id)
-        remaining_destination_ids.remove(next_destination_id)
-        current_id = next_destination_id
+    ordered_destination_ids, pairwise_route_count = multi_stop_order(
+        request,
+        venue_map,
+        multipliers,
+        blocked_edge_ids,
+    )
 
     if request.log_route_intent:
         for destination_id in ordered_destination_ids:
@@ -3159,6 +3300,8 @@ def route_multi_stop(request: RouteMultiStopRequest):
     return RouteMultiStopResponse(
         map_id=venue_map["id"],
         start_id=request.start_id,
+        order_algorithm=request.order_algorithm,
+        pairwise_route_count=pairwise_route_count,
         ordered_destination_ids=ordered_destination_ids,
         total_distance=round(total_distance, 1),
         weighted_cost=round(weighted_cost, 1),

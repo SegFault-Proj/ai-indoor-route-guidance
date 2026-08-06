@@ -1468,7 +1468,7 @@ class NavigationServiceTest(unittest.TestCase):
         )
         self.assertTrue(response.recommendation.tradeoffs["candidates"])
 
-    def test_route_multi_stop_orders_nearest_next_destination(self):
+    def test_route_multi_stop_uses_optimal_order_by_default(self):
         response = route_multi_stop(
             RouteMultiStopRequest(
                 start_id="GATE_W1",
@@ -1484,12 +1484,56 @@ class NavigationServiceTest(unittest.TestCase):
             )
         )
 
+        self.assertEqual(response.order_algorithm, "optimal")
+        self.assertEqual(response.pairwise_route_count, 4)
         self.assertEqual(response.ordered_destination_ids, ["CATERING", "PHOTO_ZONE"])
         self.assertEqual(len(response.legs), 2)
         self.assertEqual(response.legs[0].start_id, "GATE_W1")
         self.assertEqual(response.legs[0].destination_id, "CATERING")
         self.assertGreater(response.total_distance, 0)
         self.assertGreater(response.estimated_seconds, 0)
+
+    def test_route_multi_stop_can_use_nearest_order(self):
+        response = route_multi_stop(
+            RouteMultiStopRequest(
+                start_id="GATE_W1",
+                destination_ids=["PHOTO_ZONE", "CATERING"],
+                order_algorithm="nearest",
+                use_congestion=False,
+                crowd_inputs=CrowdInputs(
+                    lobby_people=25,
+                    booth_people=55,
+                    recent_inflow=20,
+                    hour=14,
+                    event_phase=2,
+                ),
+            )
+        )
+
+        self.assertEqual(response.order_algorithm, "nearest")
+        self.assertEqual(response.ordered_destination_ids, ["CATERING", "PHOTO_ZONE"])
+
+    def test_route_multi_stop_rejects_duplicate_destinations(self):
+        with self.assertRaises(HTTPException) as context:
+            route_multi_stop(
+                RouteMultiStopRequest(
+                    start_id="GATE_W1",
+                    destination_ids=["CATERING", "CATERING"],
+                )
+            )
+
+        self.assertEqual(context.exception.status_code, 400)
+
+    def test_route_multi_stop_rejects_start_as_destination(self):
+        with self.assertRaises(HTTPException) as context:
+            route_multi_stop(
+                RouteMultiStopRequest(
+                    start_id="GATE_W1",
+                    destination_ids=["GATE_W1", "CATERING"],
+                )
+            )
+
+        self.assertEqual(context.exception.status_code, 400)
 
     def test_route_simulation_runs_mixed_success_and_failure_scenarios(self):
         response = route_simulation(
