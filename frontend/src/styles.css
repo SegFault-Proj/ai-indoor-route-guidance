@@ -1,0 +1,540 @@
+:root {
+  font-family:
+    Pretendard, Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: #182233;
+  background: #eef2f7;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.page {
+  width: min(1240px, 100%);
+  margin: 0 auto;
+  padding: 30px 22px 46px;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 28px;
+  align-items: flex-end;
+  margin-bottom: 20px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(28px, 5vw, 48px);
+  line-height: 1.1;
+}
+
+.description {
+  margin: 12px 0 0;
+  color: #596679;
+}
+
+.status-card,
+.control-card,
+.map-card,
+.result-card {
+  border: 1px solid #dbe2ec;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 38px rgba(28, 39, 56, 0.08);
+}
+
+.status-card {
+  min-width: 170px;
+  padding: 16px 18px;
+  border-radius: 16px;
+}
+
+.status-card span,
+.result-card span {
+  display: block;
+  margin-bottom: 7px;
+  color: #6d798a;
+  font-size: 13px;
+}
+
+.control-card {
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+  margin-bottom: 18px;
+  padding: 18px;
+  border-radius: 18px;
+}
+
+.field-grid {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #d4dce7;
+  border-radius: 11px;
+  padding: 0 11px;
+  background: white;
+  color: #1c2736;
+}
+
+.checkbox-field {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  min-height: 42px;
+  padding-top: 20px;
+}
+
+.checkbox-field input {
+  width: 18px;
+  min-height: 18px;
+  accent-color: #265fdd;
+}
+
+button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 20px;
+  background: #265fdd;
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.map-card {
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+.map {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.edge {
+  stroke: rgba(92, 104, 119, 0.28);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.edge--clear {
+  stroke: rgba(27, 151, 93, 0.62);
+}
+
+.edge--normal {
+  stroke: rgba(242, 164, 34, 0.68);
+}
+
+.edge--busy {
+  stroke: rgba(225, 91, 52, 0.75);
+}
+
+.edge--very_busy {
+  stroke: rgba(184, 40, 52, 0.82);
+}
+
+.edge--active {
+  stroke-width: 10;
+}
+
+.route-line {
+  fill: none;
+  stroke: #245fff;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 3px 4px rgba(36, 95, 255, 0.45));
+}
+
+.node {
+  stroke: white;
+  stroke-width: 2.5;
+}
+
+.node--junction {
+  fill: #5e6d80;
+}
+
+.node--entrance,
+.node--exit {
+  fill: #159460;
+}
+
+.node--facility {
+  fill: #e7772e;
+}
+
+.node--booth {
+  fill: #6949cf;
+}
+
+.node-label {
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  fill: #172132;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.result-card {
+  min-width: 0;
+  padding: 17px;
+  border-radius: 15px;
+}
+
+.result-card strong {
+  display: block;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 16px;
+  color: #5d6878;
+  font-size: 13px;
+}
+
+.legend span {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.legend-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+
+.legend-dot--clear {
+  background: #1b975d;
+}
+
+.legend-dot--normal {
+  background: #f2a422;
+}
+
+.legend-dot--busy {
+  background: #e15b34;
+}
+
+.legend-dot--very-busy {
+  background: #b82834;
+}
+
+@media (max-width: 900px) {
+  .hero,
+  .control-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .status-card {
+    min-width: 0;
+  }
+
+  .field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .result-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .page {
+    padding: 18px 12px 34px;
+  }
+
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .node-label {
+    font-size: 15px;
+  }
+}
+
+.live-guidance-card {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 17px 18px 13px;
+  overflow: hidden;
+  border: 1px solid #dbe2ec;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 38px rgba(28, 39, 56, 0.08);
+}
+
+.guidance-main {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(120px, 1fr));
+  gap: 20px;
+  align-items: center;
+}
+
+.live-indicator {
+  display: inline-flex;
+  gap: 9px;
+  align-items: center;
+  min-width: max-content;
+  padding: 9px 12px;
+  border-radius: 999px;
+  background: #edf2f8;
+  color: #526075;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.live-indicator--running {
+  background: #e9f8f0;
+  color: #11784c;
+}
+
+.live-indicator--arrived {
+  background: #edf0ff;
+  color: #344ec2;
+}
+
+.live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.live-indicator--running .live-dot {
+  animation: live-pulse 1.25s ease-out infinite;
+}
+
+.guidance-caption {
+  display: block;
+  margin-bottom: 5px;
+  color: #738094;
+  font-size: 12px;
+}
+
+.guidance-target {
+  display: block;
+  font-size: 15px;
+}
+
+.guidance-actions {
+  display: flex;
+  gap: 9px;
+  justify-content: flex-end;
+}
+
+.secondary-button,
+.ghost-button {
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.secondary-button {
+  background: #253b67;
+}
+
+.ghost-button {
+  border: 1px solid #d5dde8;
+  background: white;
+  color: #344155;
+}
+
+.telemetry-card {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 17px 18px;
+  border: 1px solid #dbe2ec;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 38px rgba(28, 39, 56, 0.08);
+}
+
+.telemetry-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.telemetry-summary div {
+  min-width: 0;
+}
+
+.telemetry-summary span {
+  display: block;
+  margin-bottom: 5px;
+  color: #738094;
+  font-size: 12px;
+}
+
+.telemetry-summary strong {
+  display: block;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.telemetry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  justify-content: flex-end;
+}
+
+.progress-track {
+  width: 100%;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5eaf1;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #265fdd, #39a2ff);
+  transition: width 80ms linear;
+}
+
+.traveler {
+  pointer-events: none;
+}
+
+.traveler-halo {
+  fill: rgba(38, 95, 221, 0.22);
+  transform-origin: center;
+}
+
+.traveler--running .traveler-halo {
+  animation: traveler-pulse 1.1s ease-out infinite;
+}
+
+.traveler-body {
+  fill: #ffffff;
+  stroke: #245fff;
+  stroke-width: 4;
+  filter: drop-shadow(0 4px 5px rgba(20, 55, 130, 0.35));
+}
+
+.traveler-icon {
+  fill: #245fff;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.legend-dot--route {
+  background: #245fff;
+}
+
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(17, 120, 76, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 8px rgba(17, 120, 76, 0);
+  }
+}
+
+@keyframes traveler-pulse {
+  0% {
+    opacity: 0.75;
+    transform: scale(0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+
+@media (max-width: 900px) {
+  .guidance-main {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .telemetry-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .guidance-main {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .guidance-actions {
+    justify-content: stretch;
+  }
+
+  .guidance-actions button {
+    flex: 1;
+  }
+
+  .telemetry-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .telemetry-actions {
+    justify-content: stretch;
+  }
+
+  .telemetry-actions button {
+    flex: 1;
+  }
+}
