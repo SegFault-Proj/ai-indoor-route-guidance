@@ -418,6 +418,9 @@ class RouteAlternative(BaseModel):
     rank: int
     algorithm: SearchAlgorithm
     expanded_state_count: int
+    overlap_ratio: float
+    detour_ratio: float
+    quality_score: int
     path: list[str]
     edge_ids: list[str]
     route_points: list[RoutePoint]
@@ -2829,6 +2832,9 @@ def route_alternatives(request: RouteAlternativesRequest):
                 rank=index + 1,
                 algorithm=route_result["algorithm"],
                 expanded_state_count=route_result["expanded_state_count"],
+                overlap_ratio=route_result["overlap_ratio"],
+                detour_ratio=route_result["detour_ratio"],
+                quality_score=alternative_quality_score(route_result),
                 path=route_result["path"],
                 edge_ids=route_result["edge_ids"],
                 route_points=route_points_for_path(venue_map, route_result["path"]),
@@ -2861,6 +2867,14 @@ def route_alternatives(request: RouteAlternativesRequest):
         validation_mae=prediction_response.validation_mae,
         predictions=applied_predictions,
     )
+
+
+def alternative_quality_score(route_result: dict[str, Any]) -> int:
+    overlap_ratio = float(route_result.get("overlap_ratio", 1.0))
+    detour_ratio = float(route_result.get("detour_ratio", 1.0))
+    overlap_penalty = overlap_ratio * 35
+    detour_penalty = max(0.0, detour_ratio - 1.0) * 45
+    return max(0, min(100, round(100 - overlap_penalty - detour_penalty)))
 
 
 def recommendation_reasons(preference: RoutePreference) -> list[str]:

@@ -220,6 +220,11 @@ def calculate_route_alternatives(
         path_key = tuple(route["path"])
         if path_key not in seen_paths:
             seen_paths.add(path_key)
+            if routes:
+                annotate_alternative_quality(route, routes[0])
+            else:
+                route["overlap_ratio"] = 1.0
+                route["detour_ratio"] = 1.0
             routes.append(route)
             if len(routes) >= max_routes:
                 break
@@ -229,6 +234,23 @@ def calculate_route_alternatives(
             penalized_multipliers[edge_id] = current_multiplier * overlap_penalty
 
     return routes
+
+
+def annotate_alternative_quality(
+    route: dict[str, Any],
+    best_route: dict[str, Any],
+) -> None:
+    route_edge_ids = set(route["edge_ids"])
+    best_edge_ids = set(best_route["edge_ids"])
+    overlap_count = len(route_edge_ids & best_edge_ids)
+    route["overlap_ratio"] = round(
+        overlap_count / max(len(best_edge_ids), 1),
+        3,
+    )
+    route["detour_ratio"] = round(
+        float(route["weighted_cost"]) / max(float(best_route["weighted_cost"]), 0.001),
+        3,
+    )
 
 
 def route_turn_penalty(

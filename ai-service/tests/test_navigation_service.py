@@ -1414,11 +1414,18 @@ class NavigationServiceTest(unittest.TestCase):
             response.alternatives[0].overlap_with_best_edge_count,
             len(shortest.edge_ids),
         )
+        self.assertEqual(response.alternatives[0].overlap_ratio, 1.0)
+        self.assertEqual(response.alternatives[0].detour_ratio, 1.0)
+        self.assertGreaterEqual(response.alternatives[0].quality_score, 0)
         self.assertNotEqual(
             response.alternatives[1].path,
             response.alternatives[0].path,
         )
         self.assertEqual(response.alternatives[1].rank, 2)
+        self.assertLess(response.alternatives[1].overlap_ratio, 1.0)
+        self.assertGreaterEqual(response.alternatives[1].detour_ratio, 1.0)
+        self.assertGreaterEqual(response.alternatives[1].quality_score, 0)
+        self.assertLessEqual(response.alternatives[1].quality_score, 100)
         self.assertTrue(response.alternatives[1].instructions)
 
     def test_route_alternatives_rejects_unknown_node_id(self):

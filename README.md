@@ -630,6 +630,9 @@ Content-Type: application/json
 패널티를 주어 계산한 우회 경로입니다. `overlap_with_best_edge_count`가 낮을수록
 최적 경로와 덜 겹치는 경로입니다. 사용자가 “덜 혼잡한 우회 경로”를 고르거나,
 운영자가 특정 통로를 막았을 때 대체 안내 후보를 보여주는 데 사용할 수 있습니다.
+각 후보에는 `overlap_ratio`, `detour_ratio`, `quality_score`도 포함됩니다.
+`overlap_ratio`는 1번 경로와 겹치는 비율, `detour_ratio`는 1번 경로 대비 비용 비율,
+`quality_score`는 중복이 적고 과도하게 돌아가지 않는 후보일수록 높게 계산한 점수입니다.
 
 현재 위치 기반 재경로 계산:
 
