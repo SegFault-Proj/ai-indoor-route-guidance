@@ -453,7 +453,9 @@ class RouteAlternativesResponse(BaseModel):
 class RouteRecommendation(BaseModel):
     selected_rank: int
     preference: RoutePreference
+    recommendation_score: int
     reasons: list[str]
+    selection_metrics: dict[str, Any]
     tradeoffs: dict[str, Any]
 
 
@@ -2902,11 +2904,99 @@ def recommendation_reasons(preference: RoutePreference) -> list[str]:
     ]
 
 
-def route_tradeoffs(alternatives: list[RouteAlternative]) -> dict[str, Any]:
-    selected = alternatives[0]
+def route_average_multiplier(alternative: RouteAlternative) -> float:
+    if not alternative.segments:
+        return 1.0
+    weighted_sum = sum(
+        segment.multiplier * segment.distance for segment in alternative.segments
+    )
+    distance_sum = sum(segment.distance for segment in alternative.segments)
+    return round(weighted_sum / max(distance_sum, 0.001), 3)
+
+
+def route_max_multiplier(alternative: RouteAlternative) -> float:
+    if not alternative.segments:
+        return 1.0
+    return round(max(segment.multiplier for segment in alternative.segments), 3)
+
+
+def route_turn_count(alternative: RouteAlternative) -> int:
+    turn_maneuvers = {"slight_left", "left", "slight_right", "right", "u_turn"}
+    return sum(1 for segment in alternative.segments if segment.maneuver in turn_maneuvers)
+
+
+def recommendation_metrics(
+    alternative: RouteAlternative,
+    best: RouteAlternative,
+) -> dict[str, Any]:
+    return {
+        "cost_ratio": round(
+            alternative.weighted_cost / max(best.weighted_cost, 0.001),
+            3,
+        ),
+        "distance_ratio": round(
+            alternative.total_distance / max(best.total_distance, 0.001),
+            3,
+        ),
+        "average_multiplier": route_average_multiplier(alternative),
+        "max_multiplier": route_max_multiplier(alternative),
+        "turn_count": route_turn_count(alternative),
+        "overlap_ratio": alternative.overlap_ratio,
+        "detour_ratio": alternative.detour_ratio,
+        "quality_score": alternative.quality_score,
+    }
+
+
+def recommendation_score_for_metrics(
+    preference: RoutePreference,
+    metrics: dict[str, Any],
+) -> int:
+    cost_penalty = max(0.0, metrics["cost_ratio"] - 1.0)
+    distance_penalty = max(0.0, metrics["distance_ratio"] - 1.0)
+    diversity_bonus = max(0.0, 1.0 - metrics["overlap_ratio"]) * 8
+
+    if preference == "less_crowded":
+        score = (
+            100
+            - max(0.0, metrics["average_multiplier"] - 1.0) * 30
+            - max(0.0, metrics["max_multiplier"] - 1.0) * 12
+            - cost_penalty * 35
+            + diversity_bonus
+        )
+    elif preference == "accessible":
+        score = 100 - cost_penalty * 45 - distance_penalty * 25 + metrics["quality_score"] * 0.2
+    elif preference == "fewest_turns":
+        score = 100 - metrics["turn_count"] * 10 - cost_penalty * 35 + diversity_bonus
+    else:
+        score = 100 - cost_penalty * 70 - distance_penalty * 25
+
+    return max(0, min(100, round(score)))
+
+
+def select_recommended_alternative(
+    preference: RoutePreference,
+    alternatives: list[RouteAlternative],
+) -> tuple[RouteAlternative, int, dict[str, Any]]:
+    best = alternatives[0]
+    scored = []
+    for alternative in alternatives:
+        metrics = recommendation_metrics(alternative, best)
+        score = recommendation_score_for_metrics(preference, metrics)
+        scored.append((score, -alternative.weighted_cost, alternative.rank, alternative, metrics))
+
+    score, _negative_cost, _rank, selected, metrics = max(scored)
+    return selected, score, metrics
+
+
+def route_tradeoffs(
+    alternatives: list[RouteAlternative],
+    selected: RouteAlternative,
+) -> dict[str, Any]:
+    selected_edge_ids = set(selected.edge_ids)
     return {
         "selected_distance": selected.total_distance,
         "selected_weighted_cost": selected.weighted_cost,
+        "selected_quality_score": selected.quality_score,
         "candidate_count": len(alternatives),
         "candidates": [
             {
@@ -2920,8 +3010,11 @@ def route_tradeoffs(alternatives: list[RouteAlternative]) -> dict[str, Any]:
                     1,
                 ),
                 "overlap_with_selected_edge_count": (
-                    alternative.overlap_with_best_edge_count
+                    len(set(alternative.edge_ids) & selected_edge_ids)
                 ),
+                "overlap_ratio": alternative.overlap_ratio,
+                "detour_ratio": alternative.detour_ratio,
+                "quality_score": alternative.quality_score,
             }
             for alternative in alternatives
         ],
@@ -3049,7 +3142,10 @@ def build_demand_heatmap(venue_map: dict[str, Any]) -> DemandHeatmapResponse:
 @app.post("/route-recommendation", response_model=RouteRecommendationResponse)
 def route_recommendation(request: RouteAlternativesRequest):
     response = route_alternatives(request)
-    selected = response.alternatives[0]
+    selected, recommendation_score, selection_metrics = select_recommended_alternative(
+        request.preference,
+        response.alternatives,
+    )
     return RouteRecommendationResponse(
         map_id=response.map_id,
         start_id=response.start_id,
@@ -3057,8 +3153,10 @@ def route_recommendation(request: RouteAlternativesRequest):
         recommendation=RouteRecommendation(
             selected_rank=selected.rank,
             preference=request.preference,
+            recommendation_score=recommendation_score,
             reasons=recommendation_reasons(request.preference),
-            tradeoffs=route_tradeoffs(response.alternatives),
+            selection_metrics=selection_metrics,
+            tradeoffs=route_tradeoffs(response.alternatives, selected),
         ),
         selected=selected,
         alternatives=response.alternatives,

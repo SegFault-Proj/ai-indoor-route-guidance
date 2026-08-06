@@ -634,6 +634,19 @@ Content-Type: application/json
 `overlap_ratio`는 1번 경로와 겹치는 비율, `detour_ratio`는 1번 경로 대비 비용 비율,
 `quality_score`는 중복이 적고 과도하게 돌아가지 않는 후보일수록 높게 계산한 점수입니다.
 
+경로 추천:
+
+```http
+POST http://127.0.0.1:8000/route-recommendation
+Content-Type: application/json
+```
+
+`/route-recommendation`은 `/route-alternatives`와 같은 요청 형식을 사용합니다. 후보를
+만든 뒤 `preference`에 맞춰 추천 점수를 계산하고, 가장 적합한 후보를 `selected`로
+반환합니다. `less_crowded`는 평균/최대 혼잡 multiplier와 우회 비용을 함께 보고,
+`fewest_turns`는 회전 횟수를 감점합니다. 응답의 `recommendation_score`와
+`selection_metrics`로 왜 해당 후보가 선택됐는지 확인할 수 있습니다.
+
 다중 목적지 경로 계산:
 
 ```http

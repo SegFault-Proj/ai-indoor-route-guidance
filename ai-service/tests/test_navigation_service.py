@@ -1458,13 +1458,21 @@ class NavigationServiceTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(response.recommendation.selected_rank, 1)
+        self.assertEqual(response.recommendation.selected_rank, response.selected.rank)
         self.assertEqual(response.recommendation.preference, "less_crowded")
+        self.assertGreaterEqual(response.recommendation.recommendation_score, 0)
+        self.assertLessEqual(response.recommendation.recommendation_score, 100)
+        self.assertIn("average_multiplier", response.recommendation.selection_metrics)
+        self.assertIn("max_multiplier", response.recommendation.selection_metrics)
+        self.assertIn("quality_score", response.recommendation.selection_metrics)
         self.assertTrue(response.recommendation.reasons)
-        self.assertEqual(response.selected.rank, 1)
         self.assertEqual(
             response.recommendation.tradeoffs["candidate_count"],
             len(response.alternatives),
+        )
+        self.assertEqual(
+            response.recommendation.tradeoffs["selected_quality_score"],
+            response.selected.quality_score,
         )
         self.assertTrue(response.recommendation.tradeoffs["candidates"])
 
