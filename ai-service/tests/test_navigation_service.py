@@ -124,6 +124,7 @@ class NavigationServiceTest(unittest.TestCase):
         self.assertTrue(response.features["llm_map_validation"])
         self.assertTrue(response.features["llm_map_generation_jobs"])
         self.assertTrue(response.features["route_preferences"])
+        self.assertTrue(response.features["astar_route_search"])
         self.assertTrue(response.features["temporary_blocked_edges"])
         self.assertTrue(response.features["route_recommendation"])
         self.assertTrue(response.features["multi_stop_route"])
@@ -1201,10 +1202,51 @@ class NavigationServiceTest(unittest.TestCase):
         self.assertEqual(response.instructions[0], response.segments[0].instruction)
         self.assertTrue(response.use_congestion)
         self.assertEqual(response.walking_speed_mps, 1.2)
+        self.assertEqual(response.algorithm, "astar")
+        self.assertGreater(response.expanded_state_count, 0)
         self.assertGreater(response.total_distance, 0)
         self.assertGreater(response.weighted_cost, response.total_distance)
         self.assertGreater(response.estimated_seconds, 0)
         self.assertEqual(len(response.predictions), 25)
+
+    def test_route_supports_dijkstra_algorithm_for_comparison(self):
+        astar = route(
+            RouteRequest(
+                start_id="GATE_W1",
+                destination_id="BOOTH_10",
+                use_congestion=False,
+                algorithm="astar",
+                crowd_inputs=CrowdInputs(
+                    lobby_people=25,
+                    booth_people=55,
+                    recent_inflow=20,
+                    hour=14,
+                    event_phase=2,
+                ),
+            )
+        )
+        dijkstra = route(
+            RouteRequest(
+                start_id="GATE_W1",
+                destination_id="BOOTH_10",
+                use_congestion=False,
+                algorithm="dijkstra",
+                crowd_inputs=CrowdInputs(
+                    lobby_people=25,
+                    booth_people=55,
+                    recent_inflow=20,
+                    hour=14,
+                    event_phase=2,
+                ),
+            )
+        )
+
+        self.assertEqual(astar.path, dijkstra.path)
+        self.assertEqual(astar.edge_ids, dijkstra.edge_ids)
+        self.assertEqual(astar.total_distance, dijkstra.total_distance)
+        self.assertEqual(astar.weighted_cost, dijkstra.weighted_cost)
+        self.assertEqual(dijkstra.algorithm, "dijkstra")
+        self.assertLessEqual(astar.expanded_state_count, dijkstra.expanded_state_count)
 
     def test_route_supports_custom_walking_speed(self):
         response = route(

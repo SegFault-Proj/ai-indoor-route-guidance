@@ -543,6 +543,7 @@ Content-Type: application/json
   "destination_id": "BOOTH_10",
   "walking_speed_mps": 1.2,
   "use_congestion": true,
+  "algorithm": "astar",
   "log_route_intent": true,
   "crowd_inputs": {
     "lobby_people": 25,
@@ -563,6 +564,8 @@ Content-Type: application/json
   "map_id": "default",
   "use_congestion": true,
   "walking_speed_mps": 1.2,
+  "algorithm": "astar",
+  "expanded_state_count": 9,
   "path": ["GATE_W1", "WEST_HALL", "LOBBY_CENTER", "BOOTH_GATE", "AISLE_05", "BOOTH_10"],
   "edge_ids": ["E_W1_WEST", "E_WEST_LOBBY", "E_LOBBY_BOOTH_GATE", "E_GATE_A5", "E_A5_B10"],
   "route_points": [
@@ -598,6 +601,10 @@ Content-Type: application/json
 `GET /crowd/{map_id}`와 같은 추정값을 사용합니다. `log_route_intent`는 선택
 필드이며 기본값은 `true`입니다. 경로 요청 목적지를 혼잡도 추정 신호로 기록할지
 결정합니다.
+`algorithm`은 선택 필드이며 기본값은 `astar`입니다. 기존 다익스트라와 비교하거나
+작은 지도에서 디버깅할 때는 `dijkstra`로 보낼 수 있습니다. 응답의
+`expanded_state_count`는 탐색 중 확장한 상태 수로, 경로 탐색 비용을 비교할 때
+사용할 수 있습니다.
 
 대체 경로 후보 계산:
 

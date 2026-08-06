@@ -58,6 +58,7 @@ MAX_WALKING_SPEED_MPS = 3.0
 DEFAULT_MAP_ID = "default"
 COORDINATE_NODE_LOCK_PX = 32
 RoutePreference = Literal["shortest", "less_crowded", "accessible", "fewest_turns"]
+SearchAlgorithm = Literal["astar", "dijkstra"]
 TEMPORARY_BLOCKED_EDGES: dict[str, dict[str, str | None]] = {}
 
 
@@ -126,6 +127,7 @@ class RouteRequest(BaseModel):
     use_congestion: bool = True
     log_route_intent: bool = True
     preference: RoutePreference = "shortest"
+    algorithm: SearchAlgorithm = "astar"
     blocked_edge_ids: list[str] = Field(default_factory=list)
 
 
@@ -143,6 +145,7 @@ class RouteMultiStopRequest(BaseModel):
     use_congestion: bool = True
     log_route_intent: bool = True
     preference: RoutePreference = "shortest"
+    algorithm: SearchAlgorithm = "astar"
     blocked_edge_ids: list[str] = Field(default_factory=list)
 
 
@@ -154,6 +157,7 @@ class RouteSimulationScenario(BaseModel):
     walking_speed_mps: float | None = Field(default=None, gt=0, le=3)
     use_congestion: bool | None = None
     preference: RoutePreference | None = None
+    algorithm: SearchAlgorithm | None = None
     blocked_edge_ids: list[str] = Field(default_factory=list)
 
 
@@ -164,6 +168,7 @@ class RouteSimulationRequest(BaseModel):
     default_walking_speed_mps: float = Field(default=WALKING_SPEED_MPS, gt=0, le=3)
     default_use_congestion: bool = True
     default_preference: RoutePreference = "shortest"
+    default_algorithm: SearchAlgorithm = "astar"
     default_blocked_edge_ids: list[str] = Field(default_factory=list)
 
 
@@ -183,6 +188,7 @@ class PositionUpdateRequest(BaseModel):
     use_congestion: bool = True
     log_route_intent: bool = True
     preference: RoutePreference = "shortest"
+    algorithm: SearchAlgorithm = "astar"
     blocked_edge_ids: list[str] = Field(default_factory=list)
 
 
@@ -202,6 +208,7 @@ class NavigationSessionStartRequest(BaseModel):
     use_congestion: bool = True
     log_route_intent: bool = True
     preference: RoutePreference = "shortest"
+    algorithm: SearchAlgorithm = "astar"
     blocked_edge_ids: list[str] = Field(default_factory=list)
 
 
@@ -214,6 +221,7 @@ class NavigationSessionUpdateRequest(BaseModel):
     use_congestion: bool = True
     log_route_intent: bool = False
     preference: RoutePreference = "shortest"
+    algorithm: SearchAlgorithm = "astar"
     blocked_edge_ids: list[str] = Field(default_factory=list)
 
 
@@ -227,6 +235,7 @@ class NavigationSessionCoordinateUpdateRequest(BaseModel):
     use_congestion: bool = True
     log_route_intent: bool = False
     preference: RoutePreference = "shortest"
+    algorithm: SearchAlgorithm = "astar"
     blocked_edge_ids: list[str] = Field(default_factory=list)
 
 
@@ -313,6 +322,7 @@ class MapGenerationRoutePreviewRequest(BaseModel):
     walking_speed_mps: float = Field(default=WALKING_SPEED_MPS, gt=0, le=3)
     use_congestion: bool = True
     preference: RoutePreference = "shortest"
+    algorithm: SearchAlgorithm = "astar"
     blocked_edge_ids: list[str] = Field(default_factory=list)
 
 
@@ -387,6 +397,8 @@ class RouteResponse(BaseModel):
     use_congestion: bool
     walking_speed_mps: float
     preference: RoutePreference
+    algorithm: SearchAlgorithm
+    expanded_state_count: int
     blocked_edge_ids: list[str]
     path: list[str]
     edge_ids: list[str]
@@ -404,6 +416,8 @@ class RouteResponse(BaseModel):
 
 class RouteAlternative(BaseModel):
     rank: int
+    algorithm: SearchAlgorithm
+    expanded_state_count: int
     path: list[str]
     edge_ids: list[str]
     route_points: list[RoutePoint]
@@ -422,6 +436,7 @@ class RouteAlternativesResponse(BaseModel):
     use_congestion: bool
     walking_speed_mps: float
     preference: RoutePreference
+    algorithm: SearchAlgorithm
     blocked_edge_ids: list[str]
     crowd_inputs: CrowdInputs
     alternatives: list[RouteAlternative]
@@ -471,6 +486,8 @@ class RouteSimulationResult(BaseModel):
     start_id: str
     destination_id: str
     preference: RoutePreference
+    algorithm: SearchAlgorithm
+    expanded_state_count: int | None = None
     blocked_edge_ids: list[str]
     path: list[str] = Field(default_factory=list)
     edge_ids: list[str] = Field(default_factory=list)
@@ -766,6 +783,7 @@ def get_app_config():
             "llm_map_generation_jobs": True,
             "llm_map_generate_draft": True,
             "route_preferences": True,
+            "astar_route_search": True,
             "temporary_blocked_edges": True,
             "route_alternatives": True,
             "route_recommendation": True,
@@ -2341,6 +2359,7 @@ def preview_map_generation_route(
             use_congestion=request.use_congestion,
             log_route_intent=False,
             preference=request.preference,
+            algorithm=request.algorithm,
             blocked_edge_ids=request.blocked_edge_ids,
         ),
     )
@@ -2554,6 +2573,7 @@ def update_position(request: PositionUpdateRequest):
             use_congestion=request.use_congestion,
             log_route_intent=request.log_route_intent,
             preference=request.preference,
+            algorithm=request.algorithm,
             blocked_edge_ids=request.blocked_edge_ids,
         )
     )
@@ -2586,6 +2606,7 @@ def start_navigation_session(request: NavigationSessionStartRequest):
             use_congestion=request.use_congestion,
             log_route_intent=request.log_route_intent,
             preference=request.preference,
+            algorithm=request.algorithm,
             blocked_edge_ids=request.blocked_edge_ids,
         )
     )
@@ -2668,6 +2689,7 @@ def update_navigation_session_position_api(
             use_congestion=request.use_congestion,
             log_route_intent=request.log_route_intent,
             preference=request.preference,
+            algorithm=request.algorithm,
             blocked_edge_ids=request.blocked_edge_ids,
         )
     )
@@ -2724,6 +2746,7 @@ def update_navigation_session_coordinate_api(
             use_congestion=request.use_congestion,
             log_route_intent=request.log_route_intent,
             preference=request.preference,
+            algorithm=request.algorithm,
             blocked_edge_ids=request.blocked_edge_ids,
         )
     )
@@ -2778,6 +2801,7 @@ def route_alternatives(request: RouteAlternativesRequest):
         overlap_penalty=request.overlap_penalty,
         blocked_edge_ids=blocked_edge_ids,
         turn_penalty=preference_turn_penalty(request.preference),
+        algorithm=request.algorithm,
     )
     if not routes:
         raise HTTPException(
@@ -2803,6 +2827,8 @@ def route_alternatives(request: RouteAlternativesRequest):
         alternatives.append(
             RouteAlternative(
                 rank=index + 1,
+                algorithm=route_result["algorithm"],
+                expanded_state_count=route_result["expanded_state_count"],
                 path=route_result["path"],
                 edge_ids=route_result["edge_ids"],
                 route_points=route_points_for_path(venue_map, route_result["path"]),
@@ -2827,6 +2853,7 @@ def route_alternatives(request: RouteAlternativesRequest):
         use_congestion=request.use_congestion,
         walking_speed_mps=request.walking_speed_mps,
         preference=request.preference,
+        algorithm=request.algorithm,
         blocked_edge_ids=sorted(blocked_edge_ids),
         crowd_inputs=crowd_inputs,
         alternatives=alternatives,
@@ -3055,6 +3082,7 @@ def route_multi_stop(request: RouteMultiStopRequest):
                 destination_id,
                 blocked_edge_ids=blocked_edge_ids,
                 turn_penalty=preference_turn_penalty(request.preference),
+                algorithm=request.algorithm,
             )
             if route_result is None:
                 raise HTTPException(
@@ -3097,6 +3125,7 @@ def route_multi_stop(request: RouteMultiStopRequest):
                 use_congestion=request.use_congestion,
                 log_route_intent=False,
                 preference=request.preference,
+                algorithm=request.algorithm,
                 blocked_edge_ids=sorted(blocked_edge_ids),
             ),
         )
@@ -3145,6 +3174,7 @@ def route_simulation(request: RouteSimulationRequest):
             else request.default_use_congestion
         )
         preference = scenario.preference or request.default_preference
+        algorithm = scenario.algorithm or request.default_algorithm
         blocked_edge_ids = sorted(
             set(request.default_blocked_edge_ids) | set(scenario.blocked_edge_ids)
         )
@@ -3159,6 +3189,7 @@ def route_simulation(request: RouteSimulationRequest):
                     use_congestion=use_congestion,
                     log_route_intent=False,
                     preference=preference,
+                    algorithm=algorithm,
                     blocked_edge_ids=blocked_edge_ids,
                 )
             )
@@ -3169,6 +3200,8 @@ def route_simulation(request: RouteSimulationRequest):
                     start_id=scenario.start_id,
                     destination_id=scenario.destination_id,
                     preference=preference,
+                    algorithm=route_response.algorithm,
+                    expanded_state_count=route_response.expanded_state_count,
                     blocked_edge_ids=route_response.blocked_edge_ids,
                     path=route_response.path,
                     edge_ids=route_response.edge_ids,
@@ -3185,6 +3218,7 @@ def route_simulation(request: RouteSimulationRequest):
                     start_id=scenario.start_id,
                     destination_id=scenario.destination_id,
                     preference=preference,
+                    algorithm=algorithm,
                     blocked_edge_ids=blocked_edge_ids,
                     error={
                         "status_code": error.status_code,
@@ -3230,6 +3264,7 @@ def build_route_response(venue_map: dict, request: RouteRequest) -> RouteRespons
         request.destination_id,
         blocked_edge_ids=blocked_edge_ids,
         turn_penalty=preference_turn_penalty(request.preference),
+        algorithm=request.algorithm,
     )
     if route_result is None:
         raise HTTPException(
@@ -3255,6 +3290,8 @@ def build_route_response(venue_map: dict, request: RouteRequest) -> RouteRespons
         use_congestion=request.use_congestion,
         walking_speed_mps=request.walking_speed_mps,
         preference=request.preference,
+        algorithm=route_result["algorithm"],
+        expanded_state_count=route_result["expanded_state_count"],
         blocked_edge_ids=sorted(blocked_edge_ids),
         path=route_result["path"],
         edge_ids=route_result["edge_ids"],
