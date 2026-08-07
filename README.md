@@ -73,13 +73,13 @@ python -m venv .venv
 
 pip install -r requirements.txt
 python train_model.py
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --port 4000
 ```
 
 확인:
 
 ```text
-http://localhost:8000/health
+http://localhost:4000/health
 ```
 
 백엔드 테스트:
@@ -94,7 +94,7 @@ python -m unittest discover -s tests -v
 앱 부팅용 설정:
 
 ```http
-GET http://127.0.0.1:8000/app-config
+GET http://127.0.0.1:4000/app-config
 ```
 
 응답에는 기본 지도 ID, 기본 보행 속도, 입력 제한값, telemetry 집계 윈도우,
@@ -135,7 +135,7 @@ GET http://127.0.0.1:8000/app-config
 지도 목록 조회:
 
 ```http
-GET http://127.0.0.1:8000/maps
+GET http://127.0.0.1:4000/maps
 ```
 
 응답에는 지도 ID, 이름, 이미지 경로, 노드/간선 개수, 선택 가능 노드 개수,
@@ -144,7 +144,7 @@ GET http://127.0.0.1:8000/maps
 지도 데이터 조회:
 
 ```http
-GET http://127.0.0.1:8000/maps/default
+GET http://127.0.0.1:4000/maps/default
 ```
 
 응답에는 도면 이미지 경로(`/static/floorplan.png`), SVG 좌표계 크기, 노드, 간선,
@@ -155,7 +155,7 @@ GET http://127.0.0.1:8000/maps/default
 체크포인트 조회:
 
 ```http
-GET http://127.0.0.1:8000/maps/default/checkpoints
+GET http://127.0.0.1:4000/maps/default/checkpoints
 ```
 
 응답에는 QR/NFC/비콘 체크포인트 ID, 표시 이름, 연결된 `node_id`, 혼잡도 집계
@@ -165,7 +165,7 @@ GET http://127.0.0.1:8000/maps/default/checkpoints
 좌표를 노드로 스냅:
 
 ```http
-POST http://127.0.0.1:8000/maps/default/snap-coordinate
+POST http://127.0.0.1:4000/maps/default/snap-coordinate
 Content-Type: application/json
 ```
 
@@ -189,7 +189,7 @@ Content-Type: application/json
 지도 데이터 검증:
 
 ```http
-GET http://127.0.0.1:8000/maps/default/validate
+GET http://127.0.0.1:4000/maps/default/validate
 ```
 
 응답에는 지도 JSON의 필수 필드 누락, 중복 노드/간선 ID, 존재하지 않는 노드로
@@ -201,7 +201,7 @@ LLM이나 관리 화면이 새 지도를 생성한 뒤에는 이 API로 먼저 �
 LLM 생성 지도 스키마 조회:
 
 ```http
-GET http://127.0.0.1:8000/maps/schema
+GET http://127.0.0.1:4000/maps/schema
 ```
 
 LLM에는 이 응답의 필드 계약을 기준으로 지도 JSON을 만들도록 지시하면 됩니다.
@@ -211,7 +211,7 @@ LLM에는 이 응답의 필드 계약을 기준으로 지도 JSON을 만들도�
 LLM 생성 지도 데이터 검증:
 
 ```http
-POST http://127.0.0.1:8000/maps/validate-data
+POST http://127.0.0.1:4000/maps/validate-data
 Content-Type: application/json
 ```
 
@@ -233,7 +233,7 @@ LLM이 만든 초안에서 흔한 오류를 찾기 위해 `out_of_bounds_node_id
 검증된 지도 저장:
 
 ```http
-POST http://127.0.0.1:8000/maps
+POST http://127.0.0.1:4000/maps
 Content-Type: application/json
 ```
 
@@ -294,7 +294,7 @@ Content-Type: application/json
 1. 도면 이미지를 base64로 보내 생성 작업을 만듭니다.
 
 ```http
-POST http://127.0.0.1:8000/map-generation/jobs
+POST http://127.0.0.1:4000/map-generation/jobs
 Content-Type: application/json
 ```
 
@@ -314,7 +314,7 @@ Content-Type: application/json
 생성 작업 목록 조회:
 
 ```http
-GET http://127.0.0.1:8000/map-generation/jobs?limit=20
+GET http://127.0.0.1:4000/map-generation/jobs?limit=20
 ```
 
 프론트 검수 화면에서는 이 API로 최근 업로드/생성 작업을 다시 열 수 있습니다.
@@ -327,11 +327,11 @@ GET http://127.0.0.1:8000/map-generation/jobs?limit=20
 ```powershell
 $env:OPENAI_API_KEY="sk-..."
 $env:OPENAI_MAP_MODEL="gpt-5.6-terra"
-python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 4000
 ```
 
 ```http
-POST http://127.0.0.1:8000/map-generation/jobs/{job_id}/generate-draft
+POST http://127.0.0.1:4000/map-generation/jobs/{job_id}/generate-draft
 Content-Type: application/json
 ```
 
@@ -350,7 +350,7 @@ Content-Type: application/json
 3. 또는 LLM이 만든 지도 JSON 초안을 작업에 직접 붙입니다.
 
 ```http
-POST http://127.0.0.1:8000/map-generation/jobs/{job_id}/draft-map
+POST http://127.0.0.1:4000/map-generation/jobs/{job_id}/draft-map
 Content-Type: application/json
 ```
 
@@ -375,7 +375,7 @@ Content-Type: application/json
 초안 JSON과 검증 결과 조회:
 
 ```http
-GET http://127.0.0.1:8000/map-generation/jobs/{job_id}/draft-map
+GET http://127.0.0.1:4000/map-generation/jobs/{job_id}/draft-map
 ```
 
 이 응답의 `draft_map`은 편집기에 표시하고, `validation.fix_suggestions`는 수정 안내
@@ -385,7 +385,7 @@ GET http://127.0.0.1:8000/map-generation/jobs/{job_id}/draft-map
 LLM draft 자동 후처리:
 
 ```http
-POST http://127.0.0.1:8000/map-generation/jobs/{job_id}/postprocess-draft
+POST http://127.0.0.1:4000/map-generation/jobs/{job_id}/postprocess-draft
 Content-Type: application/json
 ```
 
@@ -425,7 +425,7 @@ Content-Type: application/json
 저장 전 경로 미리보기:
 
 ```http
-POST http://127.0.0.1:8000/map-generation/jobs/{job_id}/route-preview
+POST http://127.0.0.1:4000/map-generation/jobs/{job_id}/route-preview
 Content-Type: application/json
 ```
 
@@ -457,7 +457,7 @@ QR/체크포인트 기준으로도 미리볼 수 있습니다.
 4. 검증된 초안을 실제 지도 목록에 저장합니다.
 
 ```http
-POST http://127.0.0.1:8000/map-generation/jobs/{job_id}/save-map
+POST http://127.0.0.1:4000/map-generation/jobs/{job_id}/save-map
 Content-Type: application/json
 ```
 
@@ -473,7 +473,7 @@ Content-Type: application/json
 생성 지도 삭제:
 
 ```http
-DELETE http://127.0.0.1:8000/maps/generated_hall_01
+DELETE http://127.0.0.1:4000/maps/generated_hall_01
 ```
 
 저장 API로 만든 생성 지도만 삭제하는 용도입니다. 기본 지도 `default`는 삭제할 수
@@ -482,7 +482,7 @@ DELETE http://127.0.0.1:8000/maps/generated_hall_01
 카메라 없는 혼잡도 추정:
 
 ```http
-POST http://127.0.0.1:8000/telemetry/manual-crowd
+POST http://127.0.0.1:4000/telemetry/manual-crowd
 Content-Type: application/json
 ```
 
@@ -495,7 +495,7 @@ Content-Type: application/json
 ```
 
 ```http
-POST http://127.0.0.1:8000/telemetry/qr-scan
+POST http://127.0.0.1:4000/telemetry/qr-scan
 Content-Type: application/json
 ```
 
@@ -511,13 +511,13 @@ Content-Type: application/json
 현재 추정 혼잡도 조회:
 
 ```http
-GET http://127.0.0.1:8000/crowd/default
+GET http://127.0.0.1:4000/crowd/default
 ```
 
 최근 혼잡도 신호 조회:
 
 ```http
-GET http://127.0.0.1:8000/telemetry/default?limit=20
+GET http://127.0.0.1:4000/telemetry/default?limit=20
 ```
 
 응답에는 현재 추정 혼잡도, 최근 QR 스캔 목록, 최근 목적지 요청 목록이 포함됩니다.
@@ -532,7 +532,7 @@ GET http://127.0.0.1:8000/telemetry/default?limit=20
 경로 계산:
 
 ```http
-POST http://127.0.0.1:8000/route
+POST http://127.0.0.1:4000/route
 Content-Type: application/json
 ```
 
@@ -609,7 +609,7 @@ Content-Type: application/json
 대체 경로 후보 계산:
 
 ```http
-POST http://127.0.0.1:8000/route-alternatives
+POST http://127.0.0.1:4000/route-alternatives
 Content-Type: application/json
 ```
 
@@ -637,7 +637,7 @@ Content-Type: application/json
 경로 추천:
 
 ```http
-POST http://127.0.0.1:8000/route-recommendation
+POST http://127.0.0.1:4000/route-recommendation
 Content-Type: application/json
 ```
 
@@ -650,7 +650,7 @@ Content-Type: application/json
 다중 목적지 경로 계산:
 
 ```http
-POST http://127.0.0.1:8000/route-multi-stop
+POST http://127.0.0.1:4000/route-multi-stop
 Content-Type: application/json
 ```
 
@@ -674,7 +674,7 @@ Content-Type: application/json
 현재 위치 기반 재경로 계산:
 
 ```http
-POST http://127.0.0.1:8000/navigation/update-position
+POST http://127.0.0.1:4000/navigation/update-position
 Content-Type: application/json
 ```
 
@@ -698,7 +698,7 @@ Content-Type: application/json
 도면 좌표 기반 위치 갱신:
 
 ```http
-POST http://127.0.0.1:8000/navigation/sessions/{session_id}/position-coordinate
+POST http://127.0.0.1:4000/navigation/sessions/{session_id}/position-coordinate
 Content-Type: application/json
 ```
 
@@ -725,7 +725,7 @@ Content-Type: application/json
 안내 세션 시작:
 
 ```http
-POST http://127.0.0.1:8000/navigation/sessions
+POST http://127.0.0.1:4000/navigation/sessions
 Content-Type: application/json
 ```
 
@@ -744,13 +744,13 @@ Content-Type: application/json
 안내 상태를 이어서 조회할 수 있습니다.
 
 ```http
-GET http://127.0.0.1:8000/navigation/sessions/{session_id}
+GET http://127.0.0.1:4000/navigation/sessions/{session_id}
 ```
 
 세션 현재 위치 갱신:
 
 ```http
-POST http://127.0.0.1:8000/navigation/sessions/{session_id}/position
+POST http://127.0.0.1:4000/navigation/sessions/{session_id}/position
 Content-Type: application/json
 ```
 
@@ -791,7 +791,7 @@ npm run dev
 접속:
 
 ```text
-http://localhost:5173
+http://localhost:4317
 ```
 
 AI 서버가 꺼져 있거나 요청에 실패해도 프론트엔드는 로컬 대체 계산으로
