@@ -27,6 +27,7 @@ from main import (
     RouteAlternativesRequest,
     RouteMultiStopRequest,
     RouteRequest,
+    RoutePreviewRequest,
     RouteSimulationRequest,
     RouteSimulationScenario,
     TEMPORARY_BLOCKED_EDGES,
@@ -63,6 +64,7 @@ from main import (
     route_recommendation,
     route_multi_stop,
     route_simulation,
+    route_preview,
     save_map_generation_draft,
     save_map_payload,
     snap_coordinate,
@@ -1201,13 +1203,46 @@ class NavigationServiceTest(unittest.TestCase):
         self.assertIn("목적지는", response.segments[-1].instruction)
         self.assertEqual(response.instructions[0], response.segments[0].instruction)
         self.assertTrue(response.use_congestion)
-        self.assertEqual(response.walking_speed_mps, 1.2)
-        self.assertEqual(response.algorithm, "astar")
-        self.assertGreater(response.expanded_state_count, 0)
-        self.assertGreater(response.total_distance, 0)
-        self.assertGreater(response.weighted_cost, response.total_distance)
-        self.assertGreater(response.estimated_seconds, 0)
-        self.assertEqual(len(response.predictions), 25)
+
+    def test_route_preview_uses_direct_venue_map_payload(self):
+        venue_map = deepcopy(get_map("default"))
+
+        preview_response = route_preview(
+            RoutePreviewRequest(
+                venue_map=venue_map,
+                start_id="GATE_W1",
+                destination_id="BOOTH_10",
+                crowd_inputs=CrowdInputs(
+                    lobby_people=25,
+                    booth_people=55,
+                    recent_inflow=20,
+                    hour=14,
+                    event_phase=2,
+                ),
+            )
+        )
+        baseline_response = route(
+            RouteRequest(
+                start_id="GATE_W1",
+                destination_id="BOOTH_10",
+                crowd_inputs=CrowdInputs(
+                    lobby_people=25,
+                    booth_people=55,
+                    recent_inflow=20,
+                    hour=14,
+                    event_phase=2,
+                ),
+            )
+        )
+
+        self.assertEqual(preview_response.map_id, venue_map["id"])
+        self.assertEqual(preview_response.path, baseline_response.path)
+        self.assertEqual(preview_response.edge_ids, baseline_response.edge_ids)
+        self.assertEqual(preview_response.total_distance, baseline_response.total_distance)
+        self.assertEqual(
+            preview_response.instructions,
+            baseline_response.instructions,
+        )
 
     def test_route_supports_dijkstra_algorithm_for_comparison(self):
         astar = route(

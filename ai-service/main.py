@@ -137,6 +137,18 @@ class RouteAlternativesRequest(RouteRequest):
     overlap_penalty: float = Field(default=1.8, ge=1.1, le=5)
 
 
+class RoutePreviewRequest(BaseModel):
+    venue_map: dict[str, Any]
+    start_id: str
+    destination_id: str
+    crowd_inputs: CrowdInputs | None = None
+    walking_speed_mps: float = Field(default=WALKING_SPEED_MPS, gt=0, le=3)
+    use_congestion: bool = True
+    preference: RoutePreference = "shortest"
+    algorithm: SearchAlgorithm = "astar"
+    blocked_edge_ids: list[str] = Field(default_factory=list)
+
+
 class RouteMultiStopRequest(BaseModel):
     map_id: str = "default"
     start_id: str
@@ -796,6 +808,7 @@ def get_app_config():
             "temporary_blocked_edges": True,
             "route_alternatives": True,
             "route_recommendation": True,
+            "route_preview": True,
             "multi_stop_route": True,
             "crowd_forecast": True,
             "bottleneck_detection": True,
@@ -839,6 +852,7 @@ def get_app_config():
             ApiEndpoint(method="POST", path="/telemetry/qr-scan"),
             ApiEndpoint(method="POST", path="/predict-congestion"),
             ApiEndpoint(method="POST", path="/route"),
+            ApiEndpoint(method="POST", path="/route/preview"),
             ApiEndpoint(method="POST", path="/route-alternatives"),
             ApiEndpoint(method="POST", path="/route-recommendation"),
             ApiEndpoint(method="POST", path="/route-multi-stop"),
@@ -2773,6 +2787,36 @@ def route(request: RouteRequest):
         )
 
     return build_route_response(venue_map, request)
+
+
+@app.post("/route/preview", response_model=RouteResponse)
+def route_preview(request: RoutePreviewRequest):
+    validation = validate_map_data(request.venue_map)
+    if not validation["valid"]:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Venue map is invalid.",
+                "validation": {"map_id": request.venue_map.get("id"), **validation},
+            },
+        )
+
+    venue_map = request.venue_map
+    return build_route_response(
+        venue_map,
+        RouteRequest(
+            map_id=venue_map["id"],
+            start_id=request.start_id,
+            destination_id=request.destination_id,
+            crowd_inputs=request.crowd_inputs,
+            walking_speed_mps=request.walking_speed_mps,
+            use_congestion=request.use_congestion,
+            log_route_intent=False,
+            preference=request.preference,
+            algorithm=request.algorithm,
+            blocked_edge_ids=request.blocked_edge_ids,
+        ),
+    )
 
 
 @app.post("/route-alternatives", response_model=RouteAlternativesResponse)
