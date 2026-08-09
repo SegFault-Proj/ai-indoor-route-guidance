@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from crowd_store import reset_crowd_store
 from generation_store import reset_generation_store
@@ -1243,6 +1244,19 @@ class NavigationServiceTest(unittest.TestCase):
             preview_response.instructions,
             baseline_response.instructions,
         )
+
+    def test_route_preview_rejects_incomplete_venue_map_schema(self):
+        venue_map = deepcopy(get_map("default"))
+        broken_edge = deepcopy(venue_map["edges"][0])
+        broken_edge.pop("crowdRegion", None)
+        venue_map["edges"][0] = broken_edge
+
+        with self.assertRaises(ValidationError):
+            RoutePreviewRequest(
+                venue_map=venue_map,
+                start_id="GATE_W1",
+                destination_id="BOOTH_10",
+            )
 
     def test_route_supports_dijkstra_algorithm_for_comparison(self):
         astar = route(

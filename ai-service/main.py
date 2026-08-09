@@ -8,7 +8,7 @@ import numpy as np
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from crowd_store import (
     DEFAULT_EVENT_PHASE,
@@ -137,8 +137,44 @@ class RouteAlternativesRequest(RouteRequest):
     overlap_penalty: float = Field(default=1.8, ge=1.1, le=5)
 
 
+class RoutePreviewNode(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    name: str
+    x: float
+    y: float
+    type: str
+    selectable: bool
+
+
+class RoutePreviewEdge(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    id: str
+    from_: str = Field(alias="from")
+    to: str
+    distance: float = Field(gt=0)
+    widthM: float = Field(gt=0)
+    zone: str
+    crowdRegion: str
+    bidirectional: bool
+
+
+class RoutePreviewVenueMap(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    name: str
+    image: str
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+    nodes: list[RoutePreviewNode]
+    edges: list[RoutePreviewEdge]
+
+
 class RoutePreviewRequest(BaseModel):
-    venue_map: dict[str, Any]
+    venue_map: RoutePreviewVenueMap
     start_id: str
     destination_id: str
     crowd_inputs: CrowdInputs | None = None
@@ -2791,17 +2827,17 @@ def route(request: RouteRequest):
 
 @app.post("/route/preview", response_model=RouteResponse)
 def route_preview(request: RoutePreviewRequest):
-    validation = validate_map_data(request.venue_map)
+    venue_map = request.venue_map.model_dump(by_alias=True, exclude_none=True)
+    validation = validate_map_data(venue_map)
     if not validation["valid"]:
         raise HTTPException(
             status_code=400,
             detail={
                 "message": "Venue map is invalid.",
-                "validation": {"map_id": request.venue_map.get("id"), **validation},
+                "validation": {"map_id": venue_map.get("id"), **validation},
             },
         )
 
-    venue_map = request.venue_map
     return build_route_response(
         venue_map,
         RouteRequest(
