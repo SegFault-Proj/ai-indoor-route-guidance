@@ -124,6 +124,111 @@ def close_node_pairs(nodes: list[dict[str, Any]], threshold_px: float) -> list[d
     return pairs
 
 
+def is_generic_node_label(name: str) -> bool:
+    normalized_name = name.strip().lower()
+    return bool(
+        re.fullmatch(
+            r"(node|point|junction|area|place|unknown)[ _-]?\d*",
+            normalized_name,
+        )
+    )
+
+
+def node_quality_key(node: dict[str, Any]) -> tuple[int, int, int, int, str]:
+    name = str(node.get("name", "")).strip()
+    node_type = str(node.get("type", "junction"))
+    return (
+        1 if bool(node.get("selectable")) else 0,
+        1 if name and not is_generic_node_label(name) else 0,
+        1 if node_type != "junction" else 0,
+        len(name),
+        name.lower(),
+    )
+
+
+def merge_close_nodes(
+    nodes: list[dict[str, Any]],
+    close_pairs: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, str], list[dict[str, Any]]]:
+    if not close_pairs:
+        return nodes, {}, []
+
+    node_lookup = {node["id"]: node for node in nodes}
+    parent = {node["id"]: node["id"] for node in nodes}
+
+    def find(node_id: str) -> str:
+        while parent[node_id] != node_id:
+            parent[node_id] = parent[parent[node_id]]
+            node_id = parent[node_id]
+        return node_id
+
+    def union(left_id: str, right_id: str) -> None:
+        left_root = find(left_id)
+        right_root = find(right_id)
+        if left_root != right_root:
+            parent[right_root] = left_root
+
+    for pair in close_pairs:
+        left_id, right_id = pair["node_ids"]
+        if left_id in parent and right_id in parent:
+            union(left_id, right_id)
+
+    components: dict[str, list[str]] = {}
+    for node_id in parent:
+        components.setdefault(find(node_id), []).append(node_id)
+
+    merged_nodes: list[dict[str, Any]] = []
+    node_remap: dict[str, str] = {}
+    merge_changes: list[dict[str, Any]] = []
+
+    for component_ids in components.values():
+        representative_id = max(
+            component_ids,
+            key=lambda node_id: node_quality_key(node_lookup[node_id]),
+        )
+        representative = dict(node_lookup[representative_id])
+        if len(component_ids) > 1:
+            representative["x"] = round(
+                sum(float(node_lookup[node_id]["x"]) for node_id in component_ids)
+                / len(component_ids),
+                1,
+            )
+            representative["y"] = round(
+                sum(float(node_lookup[node_id]["y"]) for node_id in component_ids)
+                / len(component_ids),
+                1,
+            )
+            representative["selectable"] = any(
+                bool(node_lookup[node_id].get("selectable")) for node_id in component_ids
+            )
+            merge_changes.append(
+                {
+                    "code": "merge_close_nodes",
+                    "representative_node_id": representative_id,
+                    "merged_node_ids": sorted(component_ids),
+                }
+            )
+
+        merged_nodes.append(representative)
+        for node_id in component_ids:
+            node_remap[node_id] = representative_id
+
+    merged_nodes.sort(key=lambda node: node["id"])
+    return merged_nodes, node_remap, merge_changes
+
+
+def resolve_node_reference(value: Any, node_id_map: dict[Any, str]) -> Any:
+    current = value
+    visited: set[Any] = set()
+    while current in node_id_map and current not in visited:
+        visited.add(current)
+        next_value = node_id_map[current]
+        if next_value == current:
+            break
+        current = next_value
+    return current
+
+
 def weak_label_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     weak_nodes: list[dict[str, Any]] = []
     seen_names: dict[str, int] = {}
@@ -132,11 +237,7 @@ def weak_label_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
         normalized_name = name.lower()
         seen_names[normalized_name] = seen_names.get(normalized_name, 0) + 1
         generic_id = re.fullmatch(r"(NODE|POINT|JUNCTION)_?\d+", node["id"], re.I)
-        generic_name = re.fullmatch(
-            r"(node|point|junction|area|place|unknown)[ _-]?\d*",
-            normalized_name,
-        )
-        if not name or generic_id or generic_name:
+        if not name or generic_id or is_generic_node_label(name):
             weak_nodes.append(
                 {
                     "node_id": node["id"],
@@ -258,6 +359,7 @@ def postprocess_map_data(
     recalculate_edge_distance: bool = True,
     clamp_coordinates: bool = True,
     close_node_threshold_px: float = 18,
+    apply_close_node_merging: bool = False,
     suggest_connection_edges: bool = True,
     apply_connection_suggestions: bool = False,
     max_connection_suggestions: int = 5,
@@ -335,6 +437,15 @@ def postprocess_map_data(
         normalized_nodes.append(node)
 
     processed_map["nodes"] = normalized_nodes
+    close_pairs = close_node_pairs(processed_map["nodes"], close_node_threshold_px)
+    if apply_close_node_merging:
+        processed_map["nodes"], merged_node_map, merge_changes = merge_close_nodes(
+            processed_map["nodes"],
+            close_pairs,
+        )
+        node_id_map.update(merged_node_map)
+        if merge_changes:
+            changes.extend(merge_changes)
     node_lookup = {node["id"]: node for node in processed_map["nodes"]}
 
     used_edge_ids: set[str] = set()
@@ -351,8 +462,14 @@ def postprocess_map_data(
             continue
 
         edge = dict(raw_edge)
-        edge["from"] = node_id_map.get(edge.get("from"), edge.get("from"))
-        edge["to"] = node_id_map.get(edge.get("to"), edge.get("to"))
+        edge["from"] = resolve_node_reference(
+            node_id_map.get(edge.get("from"), edge.get("from")),
+            node_id_map,
+        )
+        edge["to"] = resolve_node_reference(
+            node_id_map.get(edge.get("to"), edge.get("to")),
+            node_id_map,
+        )
         if edge.get("from") not in node_lookup or edge.get("to") not in node_lookup:
             suggestions.append(
                 {
@@ -379,6 +496,15 @@ def postprocess_map_data(
                 }
             )
         edge["id"] = normalized_id
+        if edge["from"] == edge["to"]:
+            changes.append(
+                {
+                    "code": "drop_self_loop_edge_after_node_merge",
+                    "edge_id": normalized_id,
+                    "node_id": edge["from"],
+                }
+            )
+            continue
 
         zone = nearest_allowed(
             edge.get("zone"),
@@ -449,9 +575,9 @@ def postprocess_map_data(
             )
         checkpoint["id"] = normalized_id
         checkpoint["name"] = str(checkpoint.get("name") or normalized_id)
-        checkpoint["node_id"] = node_id_map.get(
-            checkpoint.get("node_id"),
-            checkpoint.get("node_id"),
+        checkpoint["node_id"] = resolve_node_reference(
+            node_id_map.get(checkpoint.get("node_id"), checkpoint.get("node_id")),
+            node_id_map,
         )
         if checkpoint.get("node_id") not in node_lookup:
             suggestions.append(

@@ -381,6 +381,7 @@ class MapGenerationPostprocessRequest(BaseModel):
     recalculate_edge_distance: bool = True
     clamp_coordinates: bool = True
     close_node_threshold_px: float = Field(default=18, ge=0, le=100)
+    apply_close_node_merging: bool = False
     suggest_connection_edges: bool = True
     apply_connection_suggestions: bool = False
     max_connection_suggestions: int = Field(default=5, ge=1, le=20)
@@ -2363,6 +2364,7 @@ def postprocess_map_generation_draft(
         recalculate_edge_distance=request.recalculate_edge_distance,
         clamp_coordinates=request.clamp_coordinates,
         close_node_threshold_px=request.close_node_threshold_px,
+        apply_close_node_merging=request.apply_close_node_merging,
         suggest_connection_edges=request.suggest_connection_edges,
         apply_connection_suggestions=request.apply_connection_suggestions,
         max_connection_suggestions=request.max_connection_suggestions,

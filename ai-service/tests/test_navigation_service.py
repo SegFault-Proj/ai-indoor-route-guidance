@@ -702,6 +702,109 @@ class NavigationServiceTest(unittest.TestCase):
         self.assertEqual(response.processed_map["nodes"][0]["id"], "MAIN_ENTRANCE")
         self.assertEqual(draft.draft_map["nodes"][0]["id"], "main entrance")
 
+    def test_map_generation_postprocess_can_merge_close_nodes(self):
+        job = create_map_generation_job(
+            MapGenerationJobCreateRequest(
+                source_image_base64=TEST_IMAGE_BASE64,
+                filename="floorplan.png",
+                mime_type="image/png",
+                target_map_id=TEST_MAP_ID,
+            )
+        )
+        generated_map = {
+            "id": TEST_MAP_ID,
+            "name": "가까운 노드 병합 테스트",
+            "image": "/generated-assets/test.png",
+            "width": 500,
+            "height": 300,
+            "nodes": [
+                {
+                    "id": "main entrance",
+                    "name": "메인 입구",
+                    "x": 20,
+                    "y": 20,
+                    "type": "entrance",
+                    "selectable": True,
+                },
+                {
+                    "id": "main entrance copy",
+                    "name": "메인 입구 안내",
+                    "x": 28,
+                    "y": 24,
+                    "type": "junction",
+                    "selectable": False,
+                },
+                {
+                    "id": "booth 1",
+                    "name": "부스 1",
+                    "x": 120,
+                    "y": 20,
+                    "type": "booth",
+                    "selectable": True,
+                },
+            ],
+            "checkpoints": [
+                {
+                    "id": "qr 1",
+                    "name": "입구 QR",
+                    "node_id": "main entrance copy",
+                    "region": "lobby",
+                }
+            ],
+            "edges": [
+                {
+                    "id": "edge 1",
+                    "from": "main entrance",
+                    "to": "main entrance copy",
+                    "distance": 1,
+                    "widthM": 3,
+                    "zone": "lobby",
+                    "crowdRegion": "central",
+                    "bidirectional": True,
+                },
+                {
+                    "id": "edge 2",
+                    "from": "main entrance copy",
+                    "to": "booth 1",
+                    "distance": 10,
+                    "widthM": 3,
+                    "zone": "lobby",
+                    "crowdRegion": "central",
+                    "bidirectional": True,
+                },
+            ],
+        }
+        attach_map_generation_draft(
+            job.job_id,
+            MapGenerationDraftRequest(venue_map=generated_map),
+        )
+
+        response = postprocess_map_generation_draft(
+            job.job_id,
+            MapGenerationPostprocessRequest(apply_close_node_merging=True, apply=False),
+        )
+
+        merged_node_ids = [node["id"] for node in response.processed_map["nodes"]]
+        self.assertIn("MAIN_ENTRANCE", merged_node_ids)
+        self.assertIn("BOOTH_1", merged_node_ids)
+        self.assertEqual(len(response.processed_map["nodes"]), 2)
+        self.assertEqual(len(response.processed_map["edges"]), 1)
+        self.assertEqual(response.processed_map["edges"][0]["from"], "MAIN_ENTRANCE")
+        self.assertEqual(response.processed_map["edges"][0]["to"], "BOOTH_1")
+        self.assertEqual(
+            response.processed_map["checkpoints"][0]["node_id"],
+            "MAIN_ENTRANCE",
+        )
+        self.assertTrue(
+            any(change["code"] == "merge_close_nodes" for change in response.changes)
+        )
+        self.assertTrue(
+            any(
+                change["code"] == "drop_self_loop_edge_after_node_merge"
+                for change in response.changes
+            )
+        )
+
     def test_map_postprocess_flags_weak_llm_node_labels(self):
         generated_map = {
             "id": TEST_MAP_ID,
