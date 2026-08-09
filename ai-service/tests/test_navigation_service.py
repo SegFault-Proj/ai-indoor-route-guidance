@@ -2181,6 +2181,38 @@ class NavigationServiceTest(unittest.TestCase):
         self.assertEqual(response.crowd_inputs.recent_inflow, 0)
         self.assertGreater(response.weighted_cost, 0)
 
+    def test_route_matches_frontend_contract(self):
+        response = route(
+            RouteRequest(
+                map_id="default",
+                start_id="GATE_W1",
+                destination_id="BOOTH_10",
+                walking_speed_mps=1.3,
+                use_congestion=True,
+                preference="less_crowded",
+                blocked_edge_ids=["E_LOBBY_BOOTH_GATE"],
+                crowd_inputs=CrowdInputs(
+                    lobby_people=28,
+                    booth_people=46,
+                    recent_inflow=12,
+                    hour=14,
+                    event_phase=2,
+                ),
+                log_route_intent=False,
+            )
+        )
+
+        self.assertEqual(response.map_id, "default")
+        self.assertEqual(response.path[0], "GATE_W1")
+        self.assertEqual(response.path[-1], "BOOTH_10")
+        self.assertEqual(response.walking_speed_mps, 1.3)
+        self.assertTrue(response.use_congestion)
+        self.assertEqual(response.preference, "less_crowded")
+        self.assertIn("E_LOBBY_BOOTH_GATE", response.blocked_edge_ids)
+        self.assertEqual(response.crowd_inputs.lobby_people, 28)
+        self.assertGreater(len(response.route_points), 0)
+        self.assertGreater(len(response.instructions), 0)
+
     def test_position_update_reroutes_from_current_node(self):
         response = update_position(
             PositionUpdateRequest(
