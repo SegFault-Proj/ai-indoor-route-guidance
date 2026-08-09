@@ -942,6 +942,97 @@ class NavigationServiceTest(unittest.TestCase):
             response.validation["quality_summary"]["reason_codes"],
         )
 
+    def test_map_generation_postprocess_prefers_semantic_connection_nodes(self):
+        job = create_map_generation_job(
+            MapGenerationJobCreateRequest(
+                source_image_base64=TEST_IMAGE_BASE64,
+                filename="floorplan.png",
+                mime_type="image/png",
+                target_map_id=TEST_MAP_ID,
+            )
+        )
+        generated_map = {
+            "id": TEST_MAP_ID,
+            "name": "의미 기반 연결 후보 테스트",
+            "image": "/generated-assets/test.png",
+            "width": 500,
+            "height": 300,
+            "nodes": [
+                {
+                    "id": "A_LOBBY",
+                    "name": "A 로비",
+                    "x": 0,
+                    "y": 0,
+                    "type": "junction",
+                    "selectable": False,
+                },
+                {
+                    "id": "A_BOOTH",
+                    "name": "A 부스",
+                    "x": 0,
+                    "y": 80,
+                    "type": "booth",
+                    "selectable": True,
+                },
+                {
+                    "id": "B_LOBBY",
+                    "name": "B 로비",
+                    "x": 32,
+                    "y": 0,
+                    "type": "junction",
+                    "selectable": False,
+                },
+                {
+                    "id": "B_BOOTH",
+                    "name": "B 부스",
+                    "x": 20,
+                    "y": 80,
+                    "type": "booth",
+                    "selectable": True,
+                },
+            ],
+            "checkpoints": [],
+            "edges": [
+                {
+                    "id": "E_A_LOBBY_A_BOOTH",
+                    "from": "A_LOBBY",
+                    "to": "A_BOOTH",
+                    "distance": 8,
+                    "widthM": 3,
+                    "zone": "lobby",
+                    "crowdRegion": "central",
+                    "bidirectional": True,
+                },
+                {
+                    "id": "E_B_LOBBY_B_BOOTH",
+                    "from": "B_LOBBY",
+                    "to": "B_BOOTH",
+                    "distance": 8,
+                    "widthM": 3,
+                    "zone": "lobby",
+                    "crowdRegion": "central",
+                    "bidirectional": True,
+                },
+            ],
+        }
+        attach_map_generation_draft(
+            job.job_id,
+            MapGenerationDraftRequest(venue_map=generated_map),
+        )
+
+        response = postprocess_map_generation_draft(
+            job.job_id,
+            MapGenerationPostprocessRequest(apply=False),
+        )
+
+        suggestion = next(
+            suggestion
+            for suggestion in response.suggestions
+            if suggestion["code"] == "connect_disconnected_components"
+        )
+        candidate = suggestion["candidate_edges"][0]
+        self.assertEqual({candidate["from"], candidate["to"]}, {"A_LOBBY", "B_LOBBY"})
+
     def test_map_generation_postprocess_can_apply_connection_edges(self):
         job = create_map_generation_job(
             MapGenerationJobCreateRequest(

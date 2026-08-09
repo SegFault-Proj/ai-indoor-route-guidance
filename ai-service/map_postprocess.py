@@ -292,6 +292,37 @@ def graph_components(
     return components
 
 
+def node_connection_priority(node: dict[str, Any]) -> int:
+    node_type = str(node.get("type", "junction")).lower()
+    name = str(node.get("name", "")).strip().lower()
+    score = 0
+
+    if node_type in {"entrance", "exit"}:
+        score -= 12
+    elif node_type == "facility":
+        score -= 8
+    elif node_type == "junction":
+        score -= 3
+    elif node_type == "booth":
+        score += 12
+    else:
+        score += 4
+
+    if node.get("selectable"):
+        score -= 1
+    if not name:
+        score += 8
+    elif is_generic_node_label(name):
+        score += 6
+    if "booth" in name or "부스" in name:
+        score += 3
+    if "lobby" in name or "로비" in name or "hall" in name:
+        score -= 4
+    if "info" in name or "안내" in name or "desk" in name:
+        score -= 4
+    return score
+
+
 def nearest_component_edge_candidates(
     nodes: list[dict[str, Any]],
     edges: list[dict[str, Any]],
@@ -308,6 +339,7 @@ def nearest_component_edge_candidates(
     for left_index, left_component in enumerate(components):
         for right_component in components[left_index + 1:]:
             best_pair: dict[str, Any] | None = None
+            best_score = math.inf
             best_distance = math.inf
             for left_id in left_component:
                 for right_id in right_component:
@@ -317,17 +349,26 @@ def nearest_component_edge_candidates(
                         float(left_node["x"]) - float(right_node["x"]),
                         float(left_node["y"]) - float(right_node["y"]),
                     )
-                    if distance_px < best_distance:
+                    score = (
+                        distance_px
+                        + node_connection_priority(left_node)
+                        + node_connection_priority(right_node)
+                    )
+                    if score < best_score or (
+                        score == best_score and distance_px < best_distance
+                    ):
+                        best_score = score
                         best_distance = distance_px
                         best_pair = {
                             "from": left_id,
                             "to": right_id,
                             "distance_px": round(distance_px, 1),
+                            "score": round(score, 1),
                         }
             if best_pair and best_distance <= max_distance_px:
                 candidates.append(best_pair)
 
-    candidates.sort(key=lambda candidate: candidate["distance_px"])
+    candidates.sort(key=lambda candidate: (candidate["score"], candidate["distance_px"]))
     return candidates[:max_candidates]
 
 
