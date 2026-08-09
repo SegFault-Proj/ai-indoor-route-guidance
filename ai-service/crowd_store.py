@@ -163,6 +163,12 @@ def region_for_destination(destination_id: str) -> Region:
     return "lobby"
 
 
+def region_for_node(node_id: str) -> Region:
+    if node_id.startswith("BOOTH_"):
+        return "booth"
+    return "lobby"
+
+
 def manual_estimate(map_id: str) -> dict[str, int]:
     init_crowd_store()
     with closing(connect()) as connection:
@@ -209,6 +215,51 @@ def count_route_intents(map_id: str, region: Region) -> int:
             WHERE map_id = ? AND region = ?
             """,
             (map_id, region),
+        ).fetchone()
+    return int(row["total"])
+
+
+def count_active_navigation_sessions(map_id: str, region: Region) -> int:
+    cutoff = timestamp_text(current_utc() - timedelta(minutes=EVENT_WINDOW_MINUTES))
+    with closing(connect()) as connection:
+        row = connection.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM navigation_sessions
+            WHERE map_id = ?
+              AND status = 'active'
+              AND updated_at >= ?
+              AND (
+                  CASE
+                      WHEN destination_id LIKE 'BOOTH_%' THEN 'booth'
+                      ELSE 'lobby'
+                  END
+              ) = ?
+            """,
+            (map_id, cutoff, region),
+        ).fetchone()
+    return int(row["total"])
+
+
+def count_recent_navigation_updates(map_id: str, region: Region) -> int:
+    cutoff = timestamp_text(current_utc() - timedelta(minutes=EVENT_WINDOW_MINUTES))
+    with closing(connect()) as connection:
+        row = connection.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM navigation_updates AS updates
+            INNER JOIN navigation_sessions AS sessions
+                ON sessions.session_id = updates.session_id
+            WHERE sessions.map_id = ?
+              AND updates.timestamp >= ?
+              AND (
+                  CASE
+                      WHEN updates.node_id LIKE 'BOOTH_%' THEN 'booth'
+                      ELSE 'lobby'
+                  END
+              ) = ?
+            """,
+            (map_id, cutoff, region),
         ).fetchone()
     return int(row["total"])
 
@@ -469,18 +520,37 @@ def estimate_crowd_inputs(map_id: str, hour: int, event_phase: int) -> dict[str,
     recent_qr_booth = count_qr_scans(map_id, "booth")
     recent_route_lobby = count_route_intents(map_id, "lobby")
     recent_route_booth = count_route_intents(map_id, "booth")
+    active_nav_lobby = count_active_navigation_sessions(map_id, "lobby")
+    active_nav_booth = count_active_navigation_sessions(map_id, "booth")
+    recent_nav_lobby = count_recent_navigation_updates(map_id, "lobby")
+    recent_nav_booth = count_recent_navigation_updates(map_id, "booth")
 
     lobby_people = min(
         1000,
-        manual["lobby_people"] + recent_qr_lobby + round(recent_route_lobby * 0.6),
+        manual["lobby_people"]
+        + recent_qr_lobby
+        + round(recent_route_lobby * 0.6)
+        + round(active_nav_lobby * 0.7)
+        + round(recent_nav_lobby * 0.25),
     )
     booth_people = min(
         1000,
-        manual["booth_people"] + recent_qr_booth + round(recent_route_booth * 0.8),
+        manual["booth_people"]
+        + recent_qr_booth
+        + round(recent_route_booth * 0.8)
+        + round(active_nav_booth * 0.9)
+        + round(recent_nav_booth * 0.3),
     )
     recent_inflow = min(
         1000,
-        recent_qr_lobby + recent_qr_booth + recent_route_lobby + recent_route_booth,
+        recent_qr_lobby
+        + recent_qr_booth
+        + recent_route_lobby
+        + recent_route_booth
+        + active_nav_lobby
+        + active_nav_booth
+        + recent_nav_lobby
+        + recent_nav_booth,
     )
 
     return {
@@ -499,6 +569,14 @@ def estimate_crowd_inputs(map_id: str, hour: int, event_phase: int) -> dict[str,
             "route_intents": {
                 "lobby": recent_route_lobby,
                 "booth": recent_route_booth,
+            },
+            "navigation_sessions": {
+                "lobby": active_nav_lobby,
+                "booth": active_nav_booth,
+            },
+            "navigation_updates": {
+                "lobby": recent_nav_lobby,
+                "booth": recent_nav_booth,
             },
             "manual_estimate": manual,
         },

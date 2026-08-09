@@ -2028,6 +2028,29 @@ class NavigationServiceTest(unittest.TestCase):
         self.assertEqual(estimate["booth_people"], 47)
         self.assertEqual(estimate["recent_inflow"], 12)
 
+    def test_crowd_estimate_includes_navigation_sessions(self):
+        update_manual_crowd(
+            ManualCrowdRequest(
+                map_id="default",
+                lobby_people=30,
+                booth_people=40,
+            )
+        )
+        session = start_navigation_session(
+            NavigationSessionStartRequest(
+                map_id="default",
+                start_id="GATE_W1",
+                destination_id="BOOTH_10",
+            )
+        )
+
+        estimate = get_crowd_estimate("default")
+
+        self.assertGreaterEqual(estimate["booth_people"], 41)
+        self.assertGreaterEqual(estimate["recent_inflow"], 2)
+        self.assertEqual(estimate["signals"]["navigation_sessions"]["booth"], 1)
+        self.assertEqual(estimate["signals"]["navigation_updates"]["lobby"], 1)
+
     def test_crowd_forecast_projects_recent_signals(self):
         update_manual_crowd(
             ManualCrowdRequest(
