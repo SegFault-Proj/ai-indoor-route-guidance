@@ -765,6 +765,84 @@ class NavigationServiceTest(unittest.TestCase):
         self.assertEqual(result["processed_map"]["checkpoints"][0]["region"], "lobby")
         self.assertEqual(result["processed_map"]["checkpoints"][1]["region"], "booth")
 
+    def test_map_postprocess_dedupes_duplicate_edges_and_checkpoints(self):
+        generated_map = {
+            "id": TEST_MAP_ID,
+            "name": "중복 정리 테스트",
+            "image": "/generated-assets/test.png",
+            "width": 400,
+            "height": 240,
+            "nodes": [
+                {
+                    "id": "entry",
+                    "name": "입구",
+                    "x": 20,
+                    "y": 20,
+                    "type": "entrance",
+                    "selectable": True,
+                },
+                {
+                    "id": "lobby",
+                    "name": "로비",
+                    "x": 120,
+                    "y": 20,
+                    "type": "junction",
+                    "selectable": False,
+                },
+            ],
+            "checkpoints": [
+                {
+                    "id": "qr-1",
+                    "name": "로비 QR",
+                    "node_id": "entry",
+                    "region": "lobby",
+                },
+                {
+                    "id": "qr-2",
+                    "name": "로비 QR",
+                    "node_id": "entry",
+                    "region": "lobby",
+                },
+            ],
+            "edges": [
+                {
+                    "id": "edge-1",
+                    "from": "entry",
+                    "to": "lobby",
+                    "distance": 10,
+                    "widthM": 3,
+                    "zone": "lobby",
+                    "crowdRegion": "central",
+                    "bidirectional": True,
+                },
+                {
+                    "id": "edge-2",
+                    "from": "lobby",
+                    "to": "entry",
+                    "distance": 10,
+                    "widthM": 3,
+                    "zone": "lobby",
+                    "crowdRegion": "central",
+                    "bidirectional": True,
+                },
+            ],
+        }
+
+        result = postprocess_map_data(generated_map)
+
+        self.assertTrue(result["validation"]["valid"])
+        self.assertEqual(len(result["processed_map"]["edges"]), 1)
+        self.assertEqual(len(result["processed_map"]["checkpoints"]), 1)
+        self.assertTrue(
+            any(change["code"] == "drop_duplicate_edge" for change in result["changes"])
+        )
+        self.assertTrue(
+            any(
+                change["code"] == "drop_duplicate_checkpoint"
+                for change in result["changes"]
+            )
+        )
+
     def test_map_generation_postprocess_can_merge_close_nodes(self):
         job = create_map_generation_job(
             MapGenerationJobCreateRequest(

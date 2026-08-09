@@ -269,6 +269,75 @@ def resolve_node_reference(value: Any, node_id_map: dict[Any, str]) -> Any:
     return current
 
 
+def edge_dedupe_key(edge: dict[str, Any]) -> tuple[Any, ...]:
+    from_id = str(edge.get("from"))
+    to_id = str(edge.get("to"))
+    if bool(edge.get("bidirectional", False)):
+        from_id, to_id = sorted((from_id, to_id))
+    return (
+        from_id,
+        to_id,
+        bool(edge.get("bidirectional", False)),
+        str(edge.get("zone", "")),
+        str(edge.get("crowdRegion", "")),
+        round(float(edge.get("distance", 0.0)), 1),
+        round(float(edge.get("widthM", 0.0)), 1),
+    )
+
+
+def dedupe_edges(edges: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    seen: dict[tuple[Any, ...], str] = {}
+    deduped: list[dict[str, Any]] = []
+    changes: list[dict[str, Any]] = []
+    for edge in edges:
+        key = edge_dedupe_key(edge)
+        if key in seen:
+            changes.append(
+                {
+                    "code": "drop_duplicate_edge",
+                    "edge_id": edge["id"],
+                    "duplicate_of": seen[key],
+                }
+            )
+            continue
+        seen[key] = edge["id"]
+        deduped.append(edge)
+    return deduped, changes
+
+
+def checkpoint_dedupe_key(checkpoint: dict[str, Any]) -> tuple[str, str, str]:
+    name = str(checkpoint.get("name", "")).strip().lower()
+    if is_generic_node_label(name):
+        name = ""
+    return (
+        str(checkpoint.get("node_id", "")),
+        str(checkpoint.get("region", "")),
+        name,
+    )
+
+
+def dedupe_checkpoints(
+    checkpoints: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    seen: dict[tuple[str, str, str], str] = {}
+    deduped: list[dict[str, Any]] = []
+    changes: list[dict[str, Any]] = []
+    for checkpoint in checkpoints:
+        key = checkpoint_dedupe_key(checkpoint)
+        if key in seen:
+            changes.append(
+                {
+                    "code": "drop_duplicate_checkpoint",
+                    "checkpoint_id": checkpoint["id"],
+                    "duplicate_of": seen[key],
+                }
+            )
+            continue
+        seen[key] = checkpoint["id"]
+        deduped.append(checkpoint)
+    return deduped, changes
+
+
 def weak_label_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     weak_nodes: list[dict[str, Any]] = []
     seen_names: dict[str, int] = {}
@@ -625,6 +694,9 @@ def postprocess_map_data(
 
         normalized_edges.append(edge)
 
+    normalized_edges, duplicate_edge_changes = dedupe_edges(normalized_edges)
+    if duplicate_edge_changes:
+        changes.extend(duplicate_edge_changes)
     processed_map["edges"] = normalized_edges
 
     used_checkpoint_ids: set[str] = set()
@@ -672,6 +744,11 @@ def postprocess_map_data(
         checkpoint["region"] = infer_checkpoint_region(checkpoint, node_lookup)
         normalized_checkpoints.append(checkpoint)
 
+    normalized_checkpoints, duplicate_checkpoint_changes = dedupe_checkpoints(
+        normalized_checkpoints
+    )
+    if duplicate_checkpoint_changes:
+        changes.extend(duplicate_checkpoint_changes)
     processed_map["checkpoints"] = normalized_checkpoints
 
     close_pairs = close_node_pairs(processed_map["nodes"], close_node_threshold_px)
