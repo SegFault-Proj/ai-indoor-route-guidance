@@ -141,11 +141,11 @@ class RoutePreviewNode(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     id: str
-    name: str
-    x: float
-    y: float
-    type: str
-    selectable: bool
+    name: str | None = None
+    x: float = 0
+    y: float = 0
+    type: str = "junction"
+    selectable: bool = False
 
 
 class RoutePreviewEdge(BaseModel):
@@ -154,11 +154,11 @@ class RoutePreviewEdge(BaseModel):
     id: str
     from_: str = Field(alias="from")
     to: str
-    distance: float = Field(gt=0)
-    widthM: float = Field(gt=0)
-    zone: str
-    crowdRegion: str
-    bidirectional: bool
+    distance: float = Field(default=1, gt=0)
+    widthM: float = Field(default=2.5, gt=0)
+    zone: str | None = None
+    crowdRegion: str | None = None
+    bidirectional: bool = True
 
 
 class RoutePreviewVenueMap(BaseModel):
@@ -953,9 +953,20 @@ def predict_congestion(request: PredictionRequest):
 
 
 def people_count_for_edge(edge: dict, crowd_inputs: CrowdInputs) -> int:
-    if edge["crowdRegion"] == "booth":
+    crowd_region = str(edge.get("crowdRegion") or "").lower()
+    zone = str(edge.get("zone") or "").lower()
+    if crowd_region == "booth" or zone == "booth":
         return crowd_inputs.booth_people
     return crowd_inputs.lobby_people
+
+
+def remap_ids_from_changes(ids: list[str], changes: list[dict[str, Any]], code: str) -> list[str]:
+    remap = {
+        str(change["from"]): str(change["to"])
+        for change in changes
+        if change.get("code") == code and "from" in change and "to" in change
+    }
+    return [remap.get(item, item) for item in ids]
 
 
 def route_points_for_path(venue_map: dict, path: list[str]) -> list[RoutePoint]:
@@ -2830,7 +2841,15 @@ def route(request: RouteRequest):
 @app.post("/route/preview", response_model=RouteResponse)
 def route_preview(request: RoutePreviewRequest):
     venue_map = request.venue_map.model_dump(by_alias=True, exclude_none=True)
-    validation = validate_map_data(venue_map)
+    postprocess = postprocess_map_data(
+        venue_map,
+        recalculate_edge_distance=False,
+        suggest_connection_edges=False,
+        apply_connection_suggestions=False,
+        apply_close_node_merging=False,
+    )
+    venue_map = postprocess["processed_map"]
+    validation = postprocess["validation"]
     if not validation["valid"]:
         raise HTTPException(
             status_code=400,
@@ -2840,19 +2859,36 @@ def route_preview(request: RoutePreviewRequest):
             },
         )
 
+    node_id_remap = {
+        str(change["from"]): str(change["to"])
+        for change in postprocess["changes"]
+        if change.get("code") == "normalize_node_id"
+        and "from" in change
+        and "to" in change
+    }
+    edge_id_remap = {
+        str(change["from"]): str(change["to"])
+        for change in postprocess["changes"]
+        if change.get("code") == "normalize_edge_id"
+        and "from" in change
+        and "to" in change
+    }
+
     return build_route_response(
         venue_map,
         RouteRequest(
             map_id=venue_map["id"],
-            start_id=request.start_id,
-            destination_id=request.destination_id,
+            start_id=node_id_remap.get(request.start_id, request.start_id),
+            destination_id=node_id_remap.get(request.destination_id, request.destination_id),
             crowd_inputs=request.crowd_inputs,
             walking_speed_mps=request.walking_speed_mps,
             use_congestion=request.use_congestion,
             log_route_intent=False,
             preference=request.preference,
             algorithm=request.algorithm,
-            blocked_edge_ids=request.blocked_edge_ids,
+            blocked_edge_ids=[
+                edge_id_remap.get(edge_id, edge_id) for edge_id in request.blocked_edge_ids
+            ],
         ),
     )
 

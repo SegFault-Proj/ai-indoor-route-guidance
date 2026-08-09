@@ -4,8 +4,6 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from fastapi import HTTPException
-from pydantic import ValidationError
-
 from crowd_store import reset_crowd_store
 from generation_store import reset_generation_store
 from main import (
@@ -1439,18 +1437,44 @@ class NavigationServiceTest(unittest.TestCase):
             baseline_response.instructions,
         )
 
-    def test_route_preview_rejects_incomplete_venue_map_schema(self):
+    def test_route_preview_normalizes_frontend_like_payload(self):
         venue_map = deepcopy(get_map("default"))
-        broken_edge = deepcopy(venue_map["edges"][0])
-        broken_edge.pop("crowdRegion", None)
-        venue_map["edges"][0] = broken_edge
+        venue_map["nodes"][0]["type"] = "WAYPOINT"
+        venue_map["nodes"][0].pop("selectable", None)
+        venue_map["edges"][0]["zone"] = "PATH"
+        venue_map["edges"][0].pop("crowdRegion", None)
 
-        with self.assertRaises(ValidationError):
+        preview_response = route_preview(
             RoutePreviewRequest(
                 venue_map=venue_map,
                 start_id="GATE_W1",
                 destination_id="BOOTH_10",
+                crowd_inputs=CrowdInputs(
+                    lobby_people=25,
+                    booth_people=55,
+                    recent_inflow=20,
+                    hour=14,
+                    event_phase=2,
+                ),
             )
+        )
+        baseline_response = route(
+            RouteRequest(
+                start_id="GATE_W1",
+                destination_id="BOOTH_10",
+                crowd_inputs=CrowdInputs(
+                    lobby_people=25,
+                    booth_people=55,
+                    recent_inflow=20,
+                    hour=14,
+                    event_phase=2,
+                ),
+            )
+        )
+
+        self.assertEqual(preview_response.path, baseline_response.path)
+        self.assertEqual(preview_response.edge_ids, baseline_response.edge_ids)
+        self.assertEqual(preview_response.total_distance, baseline_response.total_distance)
 
     def test_route_supports_dijkstra_algorithm_for_comparison(self):
         astar = route(
