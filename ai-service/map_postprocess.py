@@ -58,15 +58,29 @@ def nearest_allowed(value: Any, allowed_values: set[str], fallback: str) -> str:
 
 
 def infer_node_type(node: dict[str, Any]) -> str:
-    raw_text = f"{node.get('id', '')} {node.get('name', '')}".lower()
+    raw_text = " ".join(
+        [
+            str(node.get("id", "")),
+            str(node.get("name", "")),
+            str(node.get("type", "")),
+            str(node.get("kind", "")),
+            str(node.get("role", "")),
+            str(node.get("label", "")),
+        ]
+    ).lower()
+    if (
+        "info" in raw_text
+        or "desk" in raw_text
+        or "reception" in raw_text
+        or "안내" in raw_text
+    ):
+        return "facility"
     if "entrance" in raw_text or "entry" in raw_text or "입구" in raw_text:
         return "entrance"
     if "exit" in raw_text or "출구" in raw_text:
         return "exit"
     if "booth" in raw_text or "부스" in raw_text:
         return "booth"
-    if "info" in raw_text or "desk" in raw_text or "안내" in raw_text:
-        return "facility"
     return "junction"
 
 
@@ -77,8 +91,13 @@ def infer_edge_zone(edge: dict[str, Any], node_lookup: dict[str, dict[str, Any]]
         [
             str(edge.get("id", "")),
             str(edge.get("zone", "")),
+            str(edge.get("type", "")),
+            str(edge.get("kind", "")),
+            str(edge.get("role", "")),
             str(from_node.get("name", "")),
+            str(from_node.get("type", "")),
             str(to_node.get("name", "")),
+            str(to_node.get("type", "")),
         ]
     ).lower()
     if "booth" in raw_text or "부스" in raw_text:
@@ -98,6 +117,27 @@ def crowd_region_for_zone(zone: str) -> str:
     if zone == "facility":
         return "central"
     return "central"
+
+
+def infer_checkpoint_region(
+    checkpoint: dict[str, Any],
+    node_lookup: dict[str, dict[str, Any]],
+) -> str:
+    node = node_lookup.get(checkpoint.get("node_id"), {})
+    raw_text = " ".join(
+        [
+            str(checkpoint.get("id", "")),
+            str(checkpoint.get("name", "")),
+            str(checkpoint.get("region", "")),
+            str(node.get("name", "")),
+            str(node.get("type", "")),
+            str(node.get("kind", "")),
+            str(node.get("role", "")),
+        ]
+    ).lower()
+    if "booth" in raw_text or "부스" in raw_text:
+        return "booth"
+    return "lobby"
 
 
 def euclidean_distance(from_node: dict[str, Any], to_node: dict[str, Any]) -> float:
@@ -629,7 +669,7 @@ def postprocess_map_data(
                     "message": "Point this checkpoint to an existing node.",
                 }
             )
-        checkpoint["region"] = "booth" if "booth" in checkpoint["name"].lower() else "lobby"
+        checkpoint["region"] = infer_checkpoint_region(checkpoint, node_lookup)
         normalized_checkpoints.append(checkpoint)
 
     processed_map["checkpoints"] = normalized_checkpoints

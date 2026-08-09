@@ -700,6 +700,71 @@ class NavigationServiceTest(unittest.TestCase):
         self.assertEqual(response.processed_map["nodes"][0]["id"], "MAIN_ENTRANCE")
         self.assertEqual(draft.draft_map["nodes"][0]["id"], "main entrance")
 
+    def test_map_postprocess_infers_type_zone_and_checkpoint_region(self):
+        generated_map = {
+            "id": TEST_MAP_ID,
+            "name": "추론 보정 테스트",
+            "image": "/generated-assets/test.png",
+            "width": 500,
+            "height": 300,
+            "nodes": [
+                {
+                    "id": "main entrance",
+                    "name": "안내데스크",
+                    "x": 20,
+                    "y": 20,
+                    "type": "door",
+                    "kind": "info",
+                    "role": "desk",
+                    "label": "안내데스크",
+                    "selectable": True,
+                },
+                {
+                    "id": "booth 10",
+                    "name": "부스 10",
+                    "x": 120,
+                    "y": 20,
+                    "type": "point",
+                    "selectable": True,
+                },
+            ],
+            "checkpoints": [
+                {
+                    "id": "qr lobby",
+                    "name": "입구 QR",
+                    "node_id": "main entrance",
+                    "region": "outside",
+                },
+                {
+                    "id": "qr booth",
+                    "name": "부스 QR",
+                    "node_id": "booth 10",
+                    "region": "lobby",
+                },
+            ],
+            "edges": [
+                {
+                    "id": "main entrance to booth 10",
+                    "from": "main entrance",
+                    "to": "booth 10",
+                    "distance": "far",
+                    "widthM": "3",
+                    "zone": "wall",
+                    "crowdRegion": None,
+                    "bidirectional": 1,
+                }
+            ],
+        }
+
+        result = postprocess_map_data(generated_map)
+
+        self.assertTrue(result["validation"]["valid"])
+        self.assertEqual(result["processed_map"]["nodes"][0]["type"], "facility")
+        self.assertEqual(result["processed_map"]["edges"][0]["zone"], "booth")
+        self.assertEqual(result["processed_map"]["edges"][0]["crowdRegion"], "booth")
+        self.assertEqual(result["processed_map"]["checkpoints"][0]["region"], "lobby")
+        self.assertEqual(result["processed_map"]["checkpoints"][1]["region"], "booth")
+
     def test_map_generation_postprocess_can_merge_close_nodes(self):
         job = create_map_generation_job(
             MapGenerationJobCreateRequest(
